@@ -11,16 +11,16 @@ const Sidebar = () => {
   ];
 
   return (
-    <aside className="flex h-full w-64 shrink-0 flex-col overflow-hidden bg-slate-900 p-4 text-white">
-      <h1 className="mb-8 shrink-0 px-2 text-xl font-bold">Library Pro</h1>
+    <aside className="flex max-h-[42vh] w-full shrink-0 flex-col overflow-hidden bg-slate-900 p-3 text-white md:h-full md:max-h-none md:w-64 md:p-4">
+      <h1 className="mb-3 shrink-0 px-2 text-lg font-bold md:mb-8 md:text-xl">Library Pro</h1>
 
-      <nav className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+      <nav className="flex min-h-0 flex-1 gap-2 overflow-x-auto overflow-y-hidden pb-1 md:block md:space-y-2 md:overflow-y-auto md:pr-1">
         {menuItems.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              `flex shrink-0 items-center gap-2 rounded-lg px-3 py-2.5 text-sm transition-colors md:gap-3 md:px-4 md:py-3 md:text-base ${
                 isActive ? "bg-blue-600 text-white" : "hover:bg-slate-800 text-slate-400"
               }`
             }
@@ -31,7 +31,7 @@ const Sidebar = () => {
         ))}
       </nav>
 
-      <button className="mt-4 flex shrink-0 items-center gap-3 px-4 py-3 text-slate-400 transition-colors hover:text-red-400">
+      <button className="mt-3 hidden shrink-0 items-center gap-3 px-4 py-3 text-slate-400 transition-colors hover:text-red-400 md:flex">
         <LogOut size={20} />
         Logout
       </button>

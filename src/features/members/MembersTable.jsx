@@ -33,7 +33,8 @@ export const MembersTable = ({
   return (
     <>
       <div className="border border-slate-300 rounded-sm overflow-hidden bg-white">
-        <table className="w-full text-left border-collapse">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[860px] text-left border-collapse">
           <thead>
             <tr className="bg-slate-100 border-b border-slate-300">
               <th className="px-4 py-3 text-xs font-bold text-slate-700 uppercase tracking-wide border-r border-slate-300">Member</th>
@@ -104,9 +105,10 @@ export const MembersTable = ({
               })}
           </tbody>
         </table>
+        </div>
 
         {/* Pagination Bar */}
-        <div className="bg-slate-100 border-t border-slate-300 px-4 py-2 flex justify-between items-center text-xs text-slate-600">
+        <div className="flex flex-col gap-2 bg-slate-100 px-4 py-3 text-xs text-slate-600 sm:flex-row sm:items-center sm:justify-between border-t border-slate-300">
           <span>
             Showing {startRecord}-{endRecord} of {members.length} records
           </span>

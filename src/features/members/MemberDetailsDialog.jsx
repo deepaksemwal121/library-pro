@@ -113,8 +113,8 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/30 backdrop-blur-sm" />
-        <Dialog.Content className="fixed top-0 right-0 h-full w-full max-w-4xl overflow-y-auto bg-white p-6 shadow-xl">
-          <div className="mb-6 flex items-center justify-between">
+        <Dialog.Content className="fixed top-0 right-0 h-full w-full max-w-4xl overflow-y-auto bg-white p-4 shadow-xl sm:p-6">
+          <div className="mb-6 flex items-start justify-between gap-3">
             <div>
               <Dialog.Title className="text-xl font-bold text-slate-900">Member Details</Dialog.Title>
               <Dialog.Description className="text-sm text-slate-500">Edit details, change seat, or close this membership.</Dialog.Description>
@@ -266,7 +266,7 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
               <button
                 type="submit"
                 disabled={isSaving || isMarkingLeft}
-                className="rounded-md bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+                className="w-full rounded-md bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300 sm:w-auto"
               >
                 {isSaving ? "Saving..." : "Save Changes"}
               </button>
@@ -324,7 +324,7 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
               type="button"
               onClick={handleMarkLeft}
               disabled={isSaving || isMarkingLeft || !canSubmitExit}
-              className="mt-3 rounded-md bg-red-600 px-4 py-2 font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+              className="mt-3 w-full rounded-md bg-red-600 px-4 py-2 font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300 sm:w-auto"
             >
               {isMarkingLeft ? "Removing..." : "Mark Member Left"}
             </button>

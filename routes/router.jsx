@@ -6,6 +6,7 @@ import Dashboard from "../src/features/dashboard/Dashboard";
 import ProtectedLayout from "../src/components/layout/ProtectedLayout";
 import { Members } from "../src/features/members/Members";
 import { SeatManagement } from "../src/features/seatmanagement/SeatManagement";
+import { LibraryManagement } from "../src/features/librarymanagement/LibraryManagement";
 
 export const AppRoutes = () => {
   return (
@@ -21,6 +22,7 @@ export const AppRoutes = () => {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/members" element={<Members />} />
           <Route path="/seat-management" element={<SeatManagement />} />
+          <Route path="/library-management" element={<LibraryManagement />} />
         </Route>
       </Route>
 

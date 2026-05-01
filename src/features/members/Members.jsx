@@ -166,17 +166,17 @@ export const Members = () => {
   }, [members, searchQuery]);
 
   return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-6">
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <h2 className="text-2xl font-bold">Members Management</h2>
-        <div className="grid grid-cols-2 gap-2 justify-between">
+        <div className="grid w-full gap-2 sm:grid-cols-[minmax(0,1fr)_auto] lg:w-auto">
           <SearchBar placeholder={"Search Member"} value={searchQuery} onChange={setSearchQuery} />
           <AddMemberDialog>
             <MemberForm occupiedSeats={occupiedSeats} occupiedMembers={members} onMemberCreated={fetchMembers} />
           </AddMemberDialog>
         </div>
       </div>
-      {errorMessage && <div className="mb-4 border border-red-200 bg-red-50 p-3 text-sm text-red-700">{errorMessage}</div>}
+      {errorMessage && <div className="border border-red-200 bg-red-50 p-3 text-sm text-red-700">{errorMessage}</div>}
       <MembersTable
         members={filteredMembers}
         loading={loading}

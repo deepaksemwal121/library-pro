@@ -1,11 +1,10 @@
 import React, { useMemo, useState } from "react";
 import supabase from "../../../helpers/supabase";
 import { SeatManagement } from "../seatmanagement/SeatManagement";
+import { getSeatBaseFeeFromSettings } from "../seatmanagement/seatSettings";
 import { getEndOfMonth } from "./memberUtils";
 
 const LOCKER_FEE = 500;
-
-const getSeatBaseFee = (seatNumber) => (Number(seatNumber) <= 29 ? 1100 : 900);
 
 const isAfterMidMonth = (dateValue) => {
   if (!dateValue) return false;
@@ -14,10 +13,10 @@ const isAfterMidMonth = (dateValue) => {
   return date.getDate() > 15;
 };
 
-const calculateSuggestedFee = (seatNumber, lockerTaken, registrationDate) => {
+const calculateSuggestedFee = (seatNumber, lockerTaken, registrationDate, seatBaseFee) => {
   if (!seatNumber) return "";
 
-  const baseFee = getSeatBaseFee(seatNumber);
+  const baseFee = Number(seatBaseFee) || getSeatBaseFeeFromSettings(seatNumber);
   const seatFee = isAfterMidMonth(registrationDate) ? baseFee / 2 : baseFee;
   const lockerFee = lockerTaken ? LOCKER_FEE : 0;
 
@@ -34,6 +33,7 @@ const initialFormData = {
   lockerTaken: false,
   seatNumber: "",
   seatFloor: "",
+  seatBaseFee: "",
   feeAmount: "",
   paymentMethod: "Cash",
   transactionNotes: "",
@@ -53,7 +53,7 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
       return null;
     }
 
-    const baseFee = getSeatBaseFee(formData.seatNumber);
+    const baseFee = Number(formData.seatBaseFee) || getSeatBaseFeeFromSettings(formData.seatNumber);
     const midMonthDiscount = isAfterMidMonth(formData.registrationDate);
     const seatFee = midMonthDiscount ? baseFee / 2 : baseFee;
     const lockerFee = formData.lockerTaken ? LOCKER_FEE : 0;
@@ -64,19 +64,20 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
       lockerFee,
       midMonthDiscount,
     };
-  }, [formData.lockerTaken, formData.registrationDate, formData.seatNumber]);
+  }, [formData.lockerTaken, formData.registrationDate, formData.seatBaseFee, formData.seatNumber]);
 
   const withSuggestedFee = (data) => ({
     ...data,
-    feeAmount: calculateSuggestedFee(data.seatNumber, data.lockerTaken, data.registrationDate),
+    feeAmount: calculateSuggestedFee(data.seatNumber, data.lockerTaken, data.registrationDate, data.seatBaseFee),
   });
 
-  const handleSeatPick = ({ seatNumber, floor }) => {
+  const handleSeatPick = ({ seatNumber, floor, baseFee }) => {
     setFormData((prev) =>
       withSuggestedFee({
         ...prev,
         seatNumber,
         seatFloor: floor,
+        seatBaseFee: baseFee,
       }),
     );
   };
@@ -145,7 +146,7 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
   };
 
   return (
-    <div className="p-6 bg-white max-w-3xl mx-auto">
+    <div className="mx-auto max-w-3xl bg-white p-0 sm:p-2">
       <form className="space-y-4" onSubmit={handleSubmit}>
         {submitError && <div className="border border-red-200 bg-red-50 p-3 text-sm text-red-700">{submitError}</div>}
         {submitSuccess && <div className="border border-green-200 bg-green-50 p-3 text-sm text-green-700">{submitSuccess}</div>}
@@ -164,7 +165,7 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
         </div>
 
         {/* Personal Details */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
             <input
@@ -190,7 +191,7 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
         </div>
 
         {/* ID Details */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">ID Type</label>
             <select name="idType" value={formData.idType} onChange={handleChange} className="w-full border rounded-md p-2 bg-white">
@@ -214,7 +215,7 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
         </div>
 
         {/* Date and Locker */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+        <div className="grid grid-cols-1 items-end gap-4 sm:grid-cols-2">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Registration Date</label>
             <input
@@ -250,6 +251,7 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
               isLockerChecked={formData.lockerTaken}
               occupiedSeats={occupiedSeats}
               occupiedMembers={occupiedMembers}
+              allowConfiguration={false}
             />
           </div>
 
@@ -270,7 +272,7 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-1">Fee Amount (Rs.)</label>
               <input

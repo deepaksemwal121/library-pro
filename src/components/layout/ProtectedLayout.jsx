@@ -4,9 +4,9 @@ import Sidebar from "../ui/SideBar";
 
 const ProtectedLayout = () => {
   return (
-    <div className="flex min-h-screen">
+    <div className="flex h-screen overflow-hidden">
       <Sidebar />
-      <main className="flex-1 bg-slate-50 p-8 overflow-y-auto">
+      <main className="min-w-0 flex-1 overflow-y-auto bg-slate-50 p-8">
         <Outlet />
       </main>
     </div>

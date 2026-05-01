@@ -11,10 +11,10 @@ const Sidebar = () => {
   ];
 
   return (
-    <aside className="w-64 h-screen bg-slate-900 text-white flex flex-col p-4 ">
-      <h1 className="text-xl font-bold mb-8 px-2">Library Pro</h1>
+    <aside className="flex h-full w-64 shrink-0 flex-col overflow-hidden bg-slate-900 p-4 text-white">
+      <h1 className="mb-8 shrink-0 px-2 text-xl font-bold">Library Pro</h1>
 
-      <nav className="flex-1 space-y-2">
+      <nav className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
         {menuItems.map((item) => (
           <NavLink
             key={item.path}
@@ -31,7 +31,7 @@ const Sidebar = () => {
         ))}
       </nav>
 
-      <button className="flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-red-400 transition-colors">
+      <button className="mt-4 flex shrink-0 items-center gap-3 px-4 py-3 text-slate-400 transition-colors hover:text-red-400">
         <LogOut size={20} />
         Logout
       </button>

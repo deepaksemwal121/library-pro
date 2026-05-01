@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Eye } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, Eye } from "lucide-react";
 import { MemberDetailsDialog } from "./MemberDetailsDialog";
 import { getPaymentStatus } from "./memberUtils";
 
@@ -9,8 +9,26 @@ const statusClasses = {
   red: "text-red-700 bg-red-50 border-red-200",
 };
 
-export const MembersTable = ({ members = [], loading = false, onMarkPaid = () => {}, onSaveMember = () => {}, onMarkLeft = () => {} }) => {
+const MEMBERS_PER_PAGE = 10;
+
+export const MembersTable = ({
+  members = [],
+  loading = false,
+  emptyMessage = "No members registered yet.",
+  onMarkPaid = () => {},
+  onSaveMember = () => {},
+  onMarkLeft = () => {},
+}) => {
   const [selectedMember, setSelectedMember] = useState(null);
+  const [requestedPage, setRequestedPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(members.length / MEMBERS_PER_PAGE));
+  const currentPage = Math.min(requestedPage, totalPages);
+  const startRecord = members.length === 0 ? 0 : (currentPage - 1) * MEMBERS_PER_PAGE + 1;
+  const endRecord = Math.min(currentPage * MEMBERS_PER_PAGE, members.length);
+  const visibleMembers = useMemo(() => {
+    const startIndex = (currentPage - 1) * MEMBERS_PER_PAGE;
+    return members.slice(startIndex, startIndex + MEMBERS_PER_PAGE);
+  }, [currentPage, members]);
 
   return (
     <>
@@ -39,13 +57,13 @@ export const MembersTable = ({ members = [], loading = false, onMarkPaid = () =>
             {!loading && members.length === 0 && (
               <tr>
                 <td colSpan="7" className="px-4 py-6 text-center text-sm text-slate-500">
-                  No members registered yet.
+                  {emptyMessage}
                 </td>
               </tr>
             )}
 
             {!loading &&
-              members.map((member, index) => {
+              visibleMembers.map((member, index) => {
                 const paymentStatus = getPaymentStatus(member.paidUntil);
 
                 return (
@@ -89,10 +107,33 @@ export const MembersTable = ({ members = [], loading = false, onMarkPaid = () =>
 
         {/* Pagination Bar */}
         <div className="bg-slate-100 border-t border-slate-300 px-4 py-2 flex justify-between items-center text-xs text-slate-600">
-          <span>Showing {members.length} records</span>
-          <div className="flex gap-1">
-            <button className="px-2 py-1 border border-slate-300 bg-white hover:bg-slate-50">Prev</button>
-            <button className="px-2 py-1 border border-slate-300 bg-white hover:bg-slate-50">Next</button>
+          <span>
+            Showing {startRecord}-{endRecord} of {members.length} records
+          </span>
+          <div className="flex items-center gap-2">
+            <span>
+              Page {currentPage} of {totalPages}
+            </span>
+            <div className="flex gap-1">
+              <button
+                type="button"
+                aria-label="Previous page"
+                disabled={loading || currentPage === 1}
+                onClick={() => setRequestedPage((page) => Math.max(1, Math.min(page, totalPages) - 1))}
+                className="inline-flex h-7 w-7 items-center justify-center border border-slate-300 bg-white hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <ChevronLeft size={14} />
+              </button>
+              <button
+                type="button"
+                aria-label="Next page"
+                disabled={loading || currentPage === totalPages}
+                onClick={() => setRequestedPage((page) => Math.min(totalPages, page + 1))}
+                className="inline-flex h-7 w-7 items-center justify-center border border-slate-300 bg-white hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <ChevronRight size={14} />
+              </button>
+            </div>
           </div>
         </div>
       </div>

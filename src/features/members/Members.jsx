@@ -24,6 +24,7 @@ export const Members = () => {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const fetchMembers = useCallback(async () => {
     setLoading(true);
@@ -150,13 +151,26 @@ export const Members = () => {
   };
 
   const occupiedSeats = useMemo(() => members.map((member) => member.seatNumber), [members]);
+  const filteredMembers = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
+    if (!normalizedQuery) {
+      return members;
+    }
+
+    return members.filter((member) =>
+      [member.fullName, member.phoneNumber, member.seatNumber, member.seatFloor, member.idNumber]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(normalizedQuery)),
+    );
+  }, [members, searchQuery]);
 
   return (
     <div className="p-8">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold">Members Management</h2>
         <div className="grid grid-cols-2 gap-2 justify-between">
-          <SearchBar placeholder={"Search Member"} />
+          <SearchBar placeholder={"Search Member"} value={searchQuery} onChange={setSearchQuery} />
           <AddMemberDialog>
             <MemberForm occupiedSeats={occupiedSeats} occupiedMembers={members} onMemberCreated={fetchMembers} />
           </AddMemberDialog>
@@ -164,8 +178,9 @@ export const Members = () => {
       </div>
       {errorMessage && <div className="mb-4 border border-red-200 bg-red-50 p-3 text-sm text-red-700">{errorMessage}</div>}
       <MembersTable
-        members={members}
+        members={filteredMembers}
         loading={loading}
+        emptyMessage={searchQuery.trim() ? "No members match your search." : "No members registered yet."}
         onMarkPaid={handleMarkPaid}
         onSaveMember={handleSaveMember}
         onMarkLeft={handleMarkLeft}

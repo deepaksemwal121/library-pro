@@ -52,4 +52,8 @@ export const mapMemberFromDb = (member) => ({
   transactionNotes: member.transaction_notes,
   paidUntil: member.paid_until,
   memberStatus: member.member_status,
+  leftAt: member.left_at,
+  lockerSecurityRefunded: member.locker_security_refunded,
+  lockerKeysReturned: member.locker_keys_returned,
+  exitNotes: member.exit_notes,
 });

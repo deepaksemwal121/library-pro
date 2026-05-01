@@ -83,6 +83,72 @@ export const Members = () => {
     fetchMembers();
   };
 
+  const handleSaveMember = async (memberId, formData) => {
+    setErrorMessage("");
+
+    const { error } = await supabase
+      .from("library_members")
+      .update({
+        full_name: formData.fullName,
+        date_of_birth: formData.dateOfBirth || null,
+        phone_number: formData.phoneNumber,
+        id_type: formData.idType,
+        id_number: formData.idNumber,
+        registration_date: formData.registrationDate,
+        locker_taken: formData.lockerTaken,
+        seat_number: formData.seatNumber,
+        seat_floor: formData.seatFloor,
+        fee_amount: Number(formData.feeAmount),
+        payment_method: formData.paymentMethod,
+        transaction_notes: formData.transactionNotes || null,
+        paid_until: formData.paidUntil,
+      })
+      .eq("id", memberId);
+
+    if (error) {
+      if (error.code === "23505") {
+        setErrorMessage("That seat is already occupied by another active member.");
+        return false;
+      }
+
+      setErrorMessage(error.message);
+      return false;
+    }
+
+    fetchMembers();
+    return true;
+  };
+
+  const handleMarkLeft = async (memberId, leftData) => {
+    setErrorMessage("");
+
+    const member = members.find((item) => item.id === memberId);
+
+    if (member?.isLockerTaken && (!leftData.lockerSecurityRefunded || !leftData.lockerKeysReturned)) {
+      setErrorMessage("Before removing this member, mark locker security refunded and locker keys submitted.");
+      return false;
+    }
+
+    const { error } = await supabase
+      .from("library_members")
+      .update({
+        member_status: "inactive",
+        left_at: leftData.leftAt,
+        locker_security_refunded: Boolean(leftData.lockerSecurityRefunded),
+        locker_keys_returned: Boolean(leftData.lockerKeysReturned),
+        exit_notes: leftData.exitNotes || null,
+      })
+      .eq("id", memberId);
+
+    if (error) {
+      setErrorMessage(error.message);
+      return false;
+    }
+
+    fetchMembers();
+    return true;
+  };
+
   const occupiedSeats = useMemo(() => members.map((member) => member.seatNumber), [members]);
 
   return (
@@ -97,7 +163,13 @@ export const Members = () => {
         </div>
       </div>
       {errorMessage && <div className="mb-4 border border-red-200 bg-red-50 p-3 text-sm text-red-700">{errorMessage}</div>}
-      <MembersTable members={members} loading={loading} onMarkPaid={handleMarkPaid} />
+      <MembersTable
+        members={members}
+        loading={loading}
+        onMarkPaid={handleMarkPaid}
+        onSaveMember={handleSaveMember}
+        onMarkLeft={handleMarkLeft}
+      />
     </div>
   );
 };

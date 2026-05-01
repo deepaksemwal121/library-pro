@@ -1,7 +1,9 @@
 import { LayoutDashboard, Users, Grid2x2Check, Settings, LogOut, Command } from "lucide-react";
-import { NavLink } from "react-router";
+import { NavLink, useNavigate } from "react-router";
+import supabase from "../../../helpers/supabase";
 
 const Sidebar = () => {
+  const navigate = useNavigate();
   const menuItems = [
     { path: "/dashboard", name: "Dashboard", icon: <LayoutDashboard size={20} /> },
     { path: "/members", name: "Members", icon: <Users size={20} /> },
@@ -9,6 +11,11 @@ const Sidebar = () => {
     { path: "/library-management", name: "Library Management", icon: <Command size={20} /> },
     { path: "/settings", name: "Settings", icon: <Settings size={20} /> },
   ];
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/login", { replace: true });
+  };
 
   return (
     <aside className="flex max-h-[42vh] w-full shrink-0 flex-col overflow-hidden bg-slate-900 p-3 text-white md:h-full md:max-h-none md:w-64 md:p-4">
@@ -29,9 +36,21 @@ const Sidebar = () => {
             {item.name}
           </NavLink>
         ))}
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-slate-400 transition-colors hover:bg-slate-800 hover:text-red-400 md:hidden"
+        >
+          <LogOut size={20} />
+          Logout
+        </button>
       </nav>
 
-      <button className="mt-3 hidden shrink-0 items-center gap-3 px-4 py-3 text-slate-400 transition-colors hover:text-red-400 md:flex">
+      <button
+        type="button"
+        onClick={handleLogout}
+        className="mt-3 hidden shrink-0 items-center gap-3 px-4 py-3 text-slate-400 transition-colors hover:text-red-400 md:flex"
+      >
         <LogOut size={20} />
         Logout
       </button>

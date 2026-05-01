@@ -3,7 +3,7 @@ import { Outlet } from "react-router";
 
 const MainLayout = () => {
   return (
-    <div className="bg-slate-900 h-screen grid w-screen place-items-center">
+    <div className="min-h-screen bg-slate-950">
       <Outlet /> {/* Renders the current page */}
     </div>
   );

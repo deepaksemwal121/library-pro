@@ -70,19 +70,7 @@ export const Members = () => {
     };
   }, []);
 
-  const handleMarkPaid = async (memberId) => {
-    const { error } = await supabase
-      .from("library_members")
-      .update({ paid_until: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().slice(0, 10) })
-      .eq("id", memberId);
 
-    if (error) {
-      setErrorMessage(error.message);
-      return;
-    }
-
-    fetchMembers();
-  };
 
   const handleSaveMember = async (memberId, formData) => {
     setErrorMessage("");
@@ -181,7 +169,6 @@ export const Members = () => {
         members={filteredMembers}
         loading={loading}
         emptyMessage={searchQuery.trim() ? "No members match your search." : "No members registered yet."}
-        onMarkPaid={handleMarkPaid}
         onSaveMember={handleSaveMember}
         onMarkLeft={handleMarkLeft}
       />

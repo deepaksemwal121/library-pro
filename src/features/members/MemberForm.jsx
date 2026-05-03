@@ -111,35 +111,75 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
 
     setIsSubmitting(true);
 
-    const { error } = await supabase.from("library_members").insert({
-      full_name: formData.fullName,
-      date_of_birth: formData.dateOfBirth || null,
-      phone_number: formData.phoneNumber,
-      id_type: formData.idType,
-      id_number: formData.idNumber,
-      registration_date: formData.registrationDate,
-      locker_taken: formData.lockerTaken,
-      seat_number: formData.seatNumber,
-      seat_floor: formData.seatFloor,
-      fee_amount: Number(formData.feeAmount),
-      payment_method: formData.paymentMethod,
-      transaction_notes: formData.transactionNotes || null,
-      paid_until: getEndOfMonth(formData.registrationDate),
-    });
-
-    setIsSubmitting(false);
+    const { data, error } = await supabase
+      .from("library_members")
+      .insert({
+        full_name: formData.fullName,
+        date_of_birth: formData.dateOfBirth || null,
+        phone_number: formData.phoneNumber,
+        id_type: formData.idType,
+        id_number: formData.idNumber,
+        registration_date: formData.registrationDate,
+        locker_taken: formData.lockerTaken,
+        seat_number: formData.seatNumber,
+        seat_floor: formData.seatFloor,
+        fee_amount: Number(formData.feeAmount),
+        payment_method: formData.paymentMethod,
+        transaction_notes: formData.transactionNotes || null,
+        paid_until: getEndOfMonth(formData.registrationDate),
+      })
+      .select("id")
+      .single();
 
     if (error) {
+      setIsSubmitting(false);
       if (error.code === "23505") {
         setSubmitError("This seat is already occupied. Please select another seat.");
         return;
       }
-
       setSubmitError(error.message);
       return;
     }
 
-    setSubmitSuccess("Member registered successfully.");
+    // Record the registration fee payment
+    const registrationFeeAmount = Number(formData.feeAmount);
+    const { error: paymentError } = await supabase.from("payment_history").insert({
+      member_id: data.id,
+      amount: registrationFeeAmount,
+      payment_for_month: formData.registrationDate,
+      payment_method: formData.paymentMethod,
+      payment_type: "Registration Fee",
+      transaction_notes: formData.transactionNotes ? `Registration: ${formData.transactionNotes}` : "Registration Fee",
+    });
+
+    // Record locker security deposit if locker is taken
+    if (formData.lockerTaken) {
+      const LOCKER_SECURITY = 500;
+      const { error: lockerPaymentError } = await supabase.from("payment_history").insert({
+        member_id: data.id,
+        amount: LOCKER_SECURITY,
+        payment_for_month: formData.registrationDate,
+        payment_method: formData.paymentMethod,
+        payment_type: "Locker Security",
+        transaction_notes: "Locker Security Deposit - Refundable",
+      });
+
+      if (lockerPaymentError) {
+        console.error("Failed to record locker security deposit:", lockerPaymentError);
+      }
+    }
+
+    setIsSubmitting(false);
+
+    if (paymentError) {
+      setSubmitError(`Member created but failed to record payment: ${paymentError.message}`);
+      setFormData({ ...initialFormData });
+      setFormVersion((version) => version + 1);
+      onMemberCreated();
+      return;
+    }
+
+    setSubmitSuccess("Member registered successfully and payment recorded.");
     setFormData({ ...initialFormData });
     setFormVersion((version) => version + 1);
     onMemberCreated();

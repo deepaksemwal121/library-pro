@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
-import { SeatManagement } from "../seatmanagement/SeatManagement";
+import { SeatSelector } from "../seatmanagement/SeatSelector";
 
 const getEditableMemberData = (member) => ({
   fullName: member.fullName,
@@ -236,7 +236,9 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
 
             <div>
               <label className="mb-2 block text-sm font-bold text-slate-700">Change Seat</label>
-              <SeatManagement
+              <SeatSelector
+                currentSeatNumber={member.seatNumber}
+                currentFloor={member.seatFloor}
                 onSeatSelect={handleSeatPick}
                 isLockerChecked={formData.lockerTaken}
                 occupiedSeats={occupiedSeats}

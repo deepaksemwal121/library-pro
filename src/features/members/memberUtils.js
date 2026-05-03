@@ -23,7 +23,9 @@ export const getPaymentStatus = (paidUntilValue) => {
     };
   }
 
-  if (today.getDate() <= 7) {
+  const daysSinceDue = Math.floor((today - paidUntil) / (1000 * 60 * 60 * 24));
+
+  if (daysSinceDue <= 7) {
     return {
       label: "Payment due",
       tone: "yellow",

@@ -230,7 +230,7 @@ export const PaymentHistoryDialog = ({ member, open, onOpenChange, onPaymentAdde
                     Payment For Month <span className="text-red-500">*</span>
                   </label>
                   <input
-                    type="date"
+                    type="text"
                     value={formData.paymentForMonth}
                     onChange={(e) => setFormData((prev) => ({ ...prev, paymentForMonth: e.target.value }))}
                     required
@@ -239,7 +239,9 @@ export const PaymentHistoryDialog = ({ member, open, onOpenChange, onPaymentAdde
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">Payment Type <span className="text-red-500">*</span></label>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">
+                    Payment Type <span className="text-red-500">*</span>
+                  </label>
                   <select
                     value={formData.paymentType}
                     onChange={(e) => setFormData((prev) => ({ ...prev, paymentType: e.target.value }))}
@@ -317,7 +319,9 @@ export const PaymentHistoryDialog = ({ member, open, onOpenChange, onPaymentAdde
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-slate-900">₹{parseFloat(payment.amount).toFixed(2)}</span>
-                        <span className="text-xs bg-blue-100 px-2 py-1 rounded text-blue-700 font-medium">{payment.payment_type || "Monthly Fee"}</span>
+                        <span className="text-xs bg-blue-100 px-2 py-1 rounded text-blue-700 font-medium">
+                          {payment.payment_type || "Monthly Fee"}
+                        </span>
                         <span className="text-xs bg-slate-100 px-2 py-1 rounded text-slate-600">{payment.payment_method}</span>
                       </div>
                       <div className="mt-1 text-sm text-slate-600">

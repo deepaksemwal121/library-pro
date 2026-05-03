@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import supabase from "../../../helpers/supabase";
 import { mapMemberFromDb } from "../members/memberUtils";
-import { loadSeatFloors, getSeatPrice } from "./seatSettings";
+import { loadSeatFloors } from "./seatSettings";
 
 export const SeatLayoutView = ({
   currentSeatNumber = null,
@@ -9,7 +9,7 @@ export const SeatLayoutView = ({
   occupiedMembers = null,
   occupiedSeats = null,
 }) => {
-  const [floors, setFloors] = useState(loadSeatFloors);
+  const floors = useMemo(loadSeatFloors, []);
   const [activeFloorId, setActiveFloorId] = useState(currentFloor ?? floors[0]?.id ?? "second");
   const [hoveredSeat, setHoveredSeat] = useState(null);
   const [dbOccupiedMembers, setDbOccupiedMembers] = useState([]);

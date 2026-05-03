@@ -13,10 +13,10 @@ const getEditableMemberData = (member) => ({
   lockerTaken: member.isLockerTaken,
   seatNumber: member.seatNumber,
   seatFloor: member.seatFloor,
-  feeAmount: member.feeAmount,
+  feeAmount: member.feeAmount ?? "",
   paymentMethod: member.paymentMethod,
   transactionNotes: member.transactionNotes || "",
-  paidUntil: member.paidUntil,
+  paidUntil: member.paidUntil ?? "",
 });
 
 const getInitialLeftData = () => ({
@@ -117,7 +117,9 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
           <div className="mb-6 flex items-start justify-between gap-3">
             <div>
               <Dialog.Title className="text-xl font-bold text-slate-900">Member Details</Dialog.Title>
-              <Dialog.Description className="text-sm text-slate-500">Edit details, change seat, or close this membership.</Dialog.Description>
+              <Dialog.Description className="text-sm text-slate-500">
+                Edit details, change seat, or close this membership.
+              </Dialog.Description>
             </div>
             <Dialog.Close asChild>
               <button type="button" className="p-1 hover:bg-slate-100 rounded" aria-label="Close member details">
@@ -201,17 +203,7 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
                   className="w-full rounded-md border p-2 outline-blue-500"
                 />
               </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Fee Amount</label>
-                <input
-                  type="number"
-                  name="feeAmount"
-                  value={formData.feeAmount}
-                  onChange={handleChange}
-                  required
-                  className="w-full rounded-md border p-2 outline-blue-500"
-                />
-              </div>
+              {/* Fee Amount field removed from member details */}
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Payment Method</label>
                 <select
@@ -224,10 +216,7 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
                   <option>Online</option>
                 </select>
               </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Paid Until</label>
-                <input type="date" name="paidUntil" value={formData.paidUntil} onChange={handleChange} className="w-full rounded-md border p-2" />
-              </div>
+              {/* Paid Until field removed from member details */}
               <label className="flex items-center gap-2 pt-7 text-sm text-slate-700">
                 <input type="checkbox" name="lockerTaken" checked={formData.lockerTaken} onChange={handleChange} className="h-4 w-4" />
                 Locker Taken
@@ -288,7 +277,13 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
             <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Leaving Date</label>
-                <input type="date" name="leftAt" value={leftData.leftAt} onChange={handleLeftChange} className="w-full rounded-md border p-2" />
+                <input
+                  type="date"
+                  name="leftAt"
+                  value={leftData.leftAt}
+                  onChange={handleLeftChange}
+                  className="w-full rounded-md border p-2"
+                />
               </div>
               <div className="flex flex-col justify-end gap-2">
                 <label className="flex items-center gap-2 text-sm text-slate-700">

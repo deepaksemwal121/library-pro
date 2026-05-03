@@ -16,6 +16,7 @@ export const PaymentHistoryDialog = ({ member, open, onOpenChange, onPaymentAdde
     paymentMethod: "Cash",
     paymentType: "Monthly Fee",
     transactionNotes: "",
+    paidUntil: "", // Admin can set/extend paid until
   });
 
   const refreshPaymentHistory = async () => {
@@ -84,6 +85,7 @@ export const PaymentHistoryDialog = ({ member, open, onOpenChange, onPaymentAdde
 
     setIsSubmitting(true);
 
+    // Insert payment record
     const { error } = await supabase.from("payment_history").insert({
       member_id: member.id,
       amount: Number(formData.amount),
@@ -92,6 +94,40 @@ export const PaymentHistoryDialog = ({ member, open, onOpenChange, onPaymentAdde
       payment_type: formData.paymentType,
       transaction_notes: formData.transactionNotes || null,
     });
+
+    // Update member's paid_until if needed, always fetch latest
+    if (!error) {
+      try {
+        const paymentDate = new Date(`${formData.paymentForMonth}T00:00:00`);
+        const endOfMonth = new Date(paymentDate.getFullYear(), paymentDate.getMonth() + 1, 0);
+        const requestedPaidUntil = formData.paidUntil || endOfMonth.toISOString().slice(0, 10);
+        const requestedPaidUntilDate = new Date(`${requestedPaidUntil}T00:00:00`);
+
+        // Fetch latest member paid_until
+        const { data: latestMember, error: fetchError } = await supabase
+          .from("library_members")
+          .select("paid_until")
+          .eq("id", member.id)
+          .single();
+        if (fetchError) throw fetchError;
+        const currentPaidUntil = latestMember?.paid_until;
+        let shouldUpdate = false;
+        if (!currentPaidUntil) {
+          shouldUpdate = true;
+        } else {
+          const paidUntilDate = new Date(`${currentPaidUntil}T00:00:00`);
+          if (requestedPaidUntilDate > paidUntilDate) {
+            shouldUpdate = true;
+          }
+        }
+        if (shouldUpdate) {
+          await supabase.from("library_members").update({ paid_until: requestedPaidUntil }).eq("id", member.id);
+        }
+      } catch (err) {
+        // Ignore update errors, just log
+        console.error("Failed to update paid_until", err);
+      }
+    }
 
     setIsSubmitting(false);
 
@@ -107,6 +143,7 @@ export const PaymentHistoryDialog = ({ member, open, onOpenChange, onPaymentAdde
       paymentMethod: "Cash",
       paymentType: "Monthly Fee",
       transactionNotes: "",
+      paidUntil: "",
     });
     setShowAddForm(false);
     await refreshPaymentHistory();
@@ -159,6 +196,10 @@ export const PaymentHistoryDialog = ({ member, open, onOpenChange, onPaymentAdde
               <Dialog.Description className="text-sm text-slate-500">
                 {member.fullName} - Member ID: {member.id.slice(0, 8)}
               </Dialog.Description>
+              <div className="mt-2 text-xs text-slate-700">
+                <span className="font-semibold">Paid Until: </span>
+                {member.paidUntil || member.paid_until || <span className="text-red-600">Not set</span>}
+              </div>
             </div>
             <Dialog.Close asChild>
               <button type="button" className="p-1 hover:bg-slate-100 rounded" aria-label="Close payment history">
@@ -185,7 +226,7 @@ export const PaymentHistoryDialog = ({ member, open, onOpenChange, onPaymentAdde
           <div className="mb-6 grid grid-cols-2 gap-4">
             <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
               <div className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Total Paid</div>
-              <div className="mt-1 text-2xl font-bold text-slate-900">₹{totalPaid.toFixed(2)}</div>
+              <div className="mt-1 text-2xl font-bold text-slate-900">Rs.{totalPaid.toFixed(2)}</div>
             </div>
             <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
               <div className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Payments</div>
@@ -265,6 +306,17 @@ export const PaymentHistoryDialog = ({ member, open, onOpenChange, onPaymentAdde
                     <option>Online</option>
                   </select>
                 </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Extend Paid Until (optional)</label>
+                  <input
+                    type="date"
+                    value={formData.paidUntil}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, paidUntil: e.target.value }))}
+                    className="w-full rounded-md border border-slate-300 p-2"
+                  />
+                  <span className="text-xs text-slate-500">Set a new paid until date if extending membership.</span>
+                </div>
               </div>
 
               <div>
@@ -318,7 +370,7 @@ export const PaymentHistoryDialog = ({ member, open, onOpenChange, onPaymentAdde
                   >
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold text-slate-900">₹{parseFloat(payment.amount).toFixed(2)}</span>
+                        <span className="font-semibold text-slate-900">Rs.{parseFloat(payment.amount).toFixed(2)}</span>
                         <span className="text-xs bg-blue-100 px-2 py-1 rounded text-blue-700 font-medium">
                           {payment.payment_type || "Monthly Fee"}
                         </span>

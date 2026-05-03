@@ -9,9 +9,8 @@ export const SeatSelector = ({
   occupiedMembers = null,
   occupiedSeats = null,
   onSeatSelect = () => {},
-  isLockerChecked = false,
 }) => {
-  const [floors, setFloors] = useState(loadSeatFloors);
+  const floors = useMemo(loadSeatFloors, []);
   const [activeFloorId, setActiveFloorId] = useState(currentFloor ?? floors[0]?.id ?? "second");
   const [selectedSeat, setSelectedSeat] = useState(currentSeatNumber);
   const [hoveredSeat, setHoveredSeat] = useState(null);

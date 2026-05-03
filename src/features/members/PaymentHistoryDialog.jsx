@@ -230,7 +230,7 @@ export const PaymentHistoryDialog = ({ member, open, onOpenChange, onPaymentAdde
                     Payment For Month <span className="text-red-500">*</span>
                   </label>
                   <input
-                    type="text"
+                    type="date"
                     value={formData.paymentForMonth}
                     onChange={(e) => setFormData((prev) => ({ ...prev, paymentForMonth: e.target.value }))}
                     required

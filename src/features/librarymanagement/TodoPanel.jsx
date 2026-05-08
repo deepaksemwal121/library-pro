@@ -15,14 +15,22 @@ const priorityClasses = {
 
 export const TodoPanel = ({ todos, onAddTodo, onToggleTodo, onDeleteTodo }) => {
   const [todo, setTodo] = useState(initialTodo);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
+    setIsSubmitting(true);
 
-    const didAdd = onAddTodo(todo);
+    try {
+      const didAdd = await onAddTodo(todo);
 
-    if (didAdd) {
-      setTodo(initialTodo);
+      if (didAdd) {
+        setTodo(initialTodo);
+      }
+    } catch (error) {
+      console.error("Error submitting todo:", error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -60,8 +68,9 @@ export const TodoPanel = ({ todos, onAddTodo, onToggleTodo, onDeleteTodo }) => {
           </select>
           <button
             type="submit"
+            disabled={isSubmitting}
             aria-label="Add task"
-            className="inline-flex h-11 items-center justify-center rounded-md bg-blue-600 text-white hover:bg-blue-700"
+            className="inline-flex h-11 items-center justify-center rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus size={18} />
           </button>

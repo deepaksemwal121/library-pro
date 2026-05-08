@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Download, Filter } from "lucide-react";
 import { SearchBar } from "../../components/ui/SearchBar";
 import supabase from "../../../helpers/supabase";
 import { AddMemberDialog } from "./AddMemberDialog";
 import { MemberForm } from "./MemberForm";
 import { MembersTable } from "./MembersTable";
-import { mapMemberFromDb } from "./memberUtils";
+import { mapMemberFromDb, getPaymentStatus } from "./memberUtils";
+import { exportMembersToExcel } from "./memberExport";
 
 const loadActiveMembers = async () => {
   const { data, error } = await supabase
@@ -25,6 +27,7 @@ export const Members = () => {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState(null); // null means show all
 
   const fetchMembers = useCallback(async () => {
     setLoading(true);
@@ -69,8 +72,6 @@ export const Members = () => {
       ignore = true;
     };
   }, []);
-
-
 
   const handleSaveMember = async (memberId, formData) => {
     setErrorMessage("");
@@ -140,18 +141,28 @@ export const Members = () => {
 
   const occupiedSeats = useMemo(() => members.map((member) => member.seatNumber), [members]);
   const filteredMembers = useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase();
+    let result = members;
 
-    if (!normalizedQuery) {
-      return members;
+    // Apply search filter
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    if (normalizedQuery) {
+      result = result.filter((member) =>
+        [member.fullName, member.phoneNumber, member.seatNumber, member.seatFloor, member.idNumber]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(normalizedQuery)),
+      );
     }
 
-    return members.filter((member) =>
-      [member.fullName, member.phoneNumber, member.seatNumber, member.seatFloor, member.idNumber]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(normalizedQuery)),
-    );
-  }, [members, searchQuery]);
+    // Apply payment status filter
+    if (paymentStatusFilter) {
+      result = result.filter((member) => {
+        const status = getPaymentStatus(member.paidUntil);
+        return status.tone === paymentStatusFilter;
+      });
+    }
+
+    return result;
+  }, [members, searchQuery, paymentStatusFilter]);
 
   return (
     <div className="space-y-6">
@@ -164,11 +175,42 @@ export const Members = () => {
           </AddMemberDialog>
         </div>
       </div>
+
+      {/* Payment Status Filter and Download */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2">
+          <Filter size={18} className="text-slate-600" />
+          <select
+            value={paymentStatusFilter || "all"}
+            onChange={(e) => setPaymentStatusFilter(e.target.value === "all" ? null : e.target.value)}
+            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:border-slate-400"
+          >
+            <option value="all">All Members ({members.length})</option>
+            <option value="green">✓ Paid ({members.filter((m) => getPaymentStatus(m.paidUntil).tone === "green").length})</option>
+            <option value="yellow">⚠ Payment Due ({members.filter((m) => getPaymentStatus(m.paidUntil).tone === "yellow").length})</option>
+            <option value="red">✗ Due Date Passed ({members.filter((m) => getPaymentStatus(m.paidUntil).tone === "red").length})</option>
+          </select>
+        </div>
+        <button
+          onClick={() => exportMembersToExcel(filteredMembers)}
+          className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+        >
+          <Download size={18} />
+          Download Excel
+        </button>
+      </div>
+
       {errorMessage && <div className="border border-red-200 bg-red-50 p-3 text-sm text-red-700">{errorMessage}</div>}
       <MembersTable
         members={filteredMembers}
         loading={loading}
-        emptyMessage={searchQuery.trim() ? "No members match your search." : "No members registered yet."}
+        emptyMessage={
+          searchQuery.trim()
+            ? "No members match your search."
+            : paymentStatusFilter
+              ? "No members with this payment status."
+              : "No members registered yet."
+        }
         onSaveMember={handleSaveMember}
         onMarkLeft={handleMarkLeft}
       />

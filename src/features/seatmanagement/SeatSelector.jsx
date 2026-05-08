@@ -23,10 +23,7 @@ export const SeatSelector = ({
   const activeSeats = activeFloor?.seats ?? [];
   const hasProvidedSeatData = Boolean(occupiedMembers || occupiedSeats);
   const memberDetails = occupiedMembers ?? dbOccupiedMembers;
-  const memberBySeat = useMemo(
-    () => new Map(memberDetails.map((member) => [Number(member.seatNumber), member])),
-    [memberDetails],
-  );
+  const memberBySeat = useMemo(() => new Map(memberDetails.map((member) => [Number(member.seatNumber), member])), [memberDetails]);
   const occupiedSeatSet = useMemo(
     () => new Set(occupiedSeats ?? memberDetails.map((member) => member.seatNumber)),
     [memberDetails, occupiedSeats],
@@ -45,10 +42,7 @@ export const SeatSelector = ({
       setIsLoadingSeats(true);
       setSeatError("");
 
-      const { data, error } = await supabase
-        .from("library_members")
-        .select("*")
-        .eq("member_status", "active");
+      const { data, error } = await supabase.from("library_members").select("*").eq("member_status", "active");
 
       if (ignore) return;
 
@@ -107,8 +101,12 @@ export const SeatSelector = ({
         </div>
         <div className="flex flex-wrap gap-2 text-xs font-medium">
           <span className="border border-blue-200 bg-blue-50 px-2 py-1 text-blue-700">Total: {activeFloor?.seats.length ?? 0}</span>
-          <span className="border border-emerald-200 bg-emerald-50 px-2 py-1 text-emerald-700">Available: {shouldBlockSeatActions ? "--" : availableOnFloor}</span>
-          <span className="border border-slate-300 bg-slate-100 px-2 py-1 text-slate-600">Occupied: {shouldBlockSeatActions ? "--" : occupiedOnFloor}</span>
+          <span className="border border-emerald-200 bg-emerald-50 px-2 py-1 text-emerald-700">
+            Available: {shouldBlockSeatActions ? "--" : availableOnFloor}
+          </span>
+          <span className="border border-slate-300 bg-slate-100 px-2 py-1 text-slate-600">
+            Occupied: {shouldBlockSeatActions ? "--" : occupiedOnFloor}
+          </span>
         </div>
       </div>
 
@@ -146,14 +144,14 @@ export const SeatSelector = ({
                 onMouseLeave={() => setHoveredSeat(null)}
                 onFocus={() => !shouldBlockSeatActions && setHoveredSeat(seat)}
                 onClick={() => handleSeatClick(seat)}
-                className={`h-[52px] border p-2 text-center text-sm transition-colors flex items-center justify-center flex-col ${
+                className={`h-[52px] border p-2 text-center text-sm transition-colors flex items-center justify-center flex-col rounded-sm ${
                   shouldBlockSeatActions
                     ? "cursor-wait bg-slate-100 text-slate-300 border-slate-200 animate-pulse"
                     : isOccupied
                       ? "cursor-not-allowed bg-gray-200 text-gray-500 border-gray-300"
                       : isSelected
                         ? "cursor-pointer bg-blue-500 text-white border-blue-700 font-semibold"
-                        : "cursor-pointer bg-white border-slate-200 hover:border-blue-400 hover:bg-blue-50"
+                        : "cursor-pointer bg-white border-slate-200 hover:border-blue-400 hover:bg-blue-50 rounded"
                 }`}
               >
                 <span className="font-medium">{seat}</span>
@@ -209,7 +207,7 @@ export const SeatSelector = ({
 
           <div className="mt-4 space-y-2 border-t pt-3 text-xs">
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-white border border-slate-300 rounded"></div>
+              <div className="w-4 h-4 bg-white border  border-slate-300 rounded"></div>
               <span className="text-slate-600">Available</span>
             </div>
             <div className="flex items-center gap-2">

@@ -13,6 +13,7 @@ const initialExpense = {
 export const ExpenseForm = ({ categories, onAddCategory, onAddExpense }) => {
   const [expense, setExpense] = useState(initialExpense);
   const [newCategory, setNewCategory] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const selectedCategory = useMemo(() => expense.category || categories[0] || "", [categories, expense.category]);
 
   const handleChange = (event) => {
@@ -29,17 +30,24 @@ export const ExpenseForm = ({ categories, onAddCategory, onAddExpense }) => {
     }
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
+    setIsSubmitting(true);
 
-    const didAdd = onAddExpense({
-      ...expense,
-      category: selectedCategory,
-      amount: Number(expense.amount),
-    });
+    try {
+      const didAdd = await onAddExpense({
+        ...expense,
+        category: selectedCategory,
+        amount: Number(expense.amount),
+      });
 
-    if (didAdd) {
-      setExpense({ ...initialExpense, category: selectedCategory });
+      if (didAdd) {
+        setExpense({ ...initialExpense, category: selectedCategory });
+      }
+    } catch (error) {
+      console.error("Error submitting expense:", error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -151,8 +159,12 @@ export const ExpenseForm = ({ categories, onAddCategory, onAddExpense }) => {
             <Plus size={16} />
             Category
           </button>
-          <button type="submit" className="rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700">
-            Save Expense
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSubmitting ? "Saving..." : "Save Expense"}
           </button>
         </div>
       </form>

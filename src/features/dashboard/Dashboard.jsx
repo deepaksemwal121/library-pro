@@ -1,28 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  AlertTriangle,
-  ArrowUpRight,
-  BarChart3,
-  Brain,
-  IndianRupee,
-  Target,
-  TrendingUp,
-  Users,
-} from "lucide-react";
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { AlertTriangle, ArrowUpRight, BarChart3, Brain, IndianRupee, Target, TrendingUp, Users } from "lucide-react";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import supabase from "../../../helpers/supabase";
 import { loadManagementData } from "../librarymanagement/libraryStorage";
 import { getPaymentStatus, mapMemberFromDb } from "../members/memberUtils";
@@ -103,10 +81,7 @@ const Dashboard = () => {
       setLoading(true);
       setErrorMessage("");
 
-      const { data, error } = await supabase
-        .from("library_members")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const { data, error } = await supabase.from("library_members").select("*").order("created_at", { ascending: false });
 
       if (ignore) return;
 
@@ -138,8 +113,22 @@ const Dashboard = () => {
     const dueMembers = activeMembers.filter((member) => getPaymentStatus(member.paidUntil).tone === "yellow");
     const joinedThisMonth = members.filter((member) => isSameMonth(member.registrationDate, 0)).length;
     const joinedLastMonth = members.filter((member) => isSameMonth(member.registrationDate, -1)).length;
-    const growthRate = joinedLastMonth ? Math.round(((joinedThisMonth - joinedLastMonth) / joinedLastMonth) * 100) : joinedThisMonth * 100;
-    const churnRate = activeMembers.length ? Math.round((inactiveMembers.length / (activeMembers.length + inactiveMembers.length)) * 100) : 0;
+
+    // Calculate seat occupancy growth rate (active members this month vs last month)
+    const occupiedSeatsThisMonth = activeMembers.length;
+    // Estimate last month's occupancy by subtracting members who joined this month and are active
+    const activeJoinedThisMonth = joinedThisMonth;
+    const occupiedSeatsLastMonth = Math.max(0, occupiedSeatsThisMonth - activeJoinedThisMonth);
+    const growthRate =
+      occupiedSeatsLastMonth > 0
+        ? Math.round(((occupiedSeatsThisMonth - occupiedSeatsLastMonth) / occupiedSeatsLastMonth) * 100)
+        : activeJoinedThisMonth > 0
+          ? 100
+          : 0;
+
+    const churnRate = activeMembers.length
+      ? Math.round((inactiveMembers.length / (activeMembers.length + inactiveMembers.length)) * 100)
+      : 0;
 
     return {
       activeMembers,
@@ -226,9 +215,9 @@ const Dashboard = () => {
 
     if (metrics.growthRate >= 0) {
       list.push({
-        title: "Growth runway looks positive",
+        title: "Seat occupancy is growing",
         tone: "growth",
-        description: `This month has ${metrics.joinedThisMonth} registrations. Keep seat availability visible and follow up with warm leads quickly.`,
+        description: `Your seat occupancy is up ${metrics.growthRate}% compared to last month. With ${metrics.activeMembers.length}/85 seats occupied, there's room for growth.`,
       });
     }
 
@@ -257,7 +246,9 @@ const Dashboard = () => {
         <div>
           <p className="text-sm font-semibold uppercase tracking-wide text-blue-600">Business Intelligence</p>
           <h2 className="mt-1 text-2xl font-bold text-slate-950 sm:text-3xl">Library Performance Command Center</h2>
-          <p className="mt-2 text-sm text-slate-500">Revenue, expenses, growth, risk, and operational guidance from your live library data.</p>
+          <p className="mt-2 text-sm text-slate-500">
+            Revenue, expenses, growth, risk, and operational guidance from your live library data.
+          </p>
         </div>
         <div className="w-full border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700 sm:w-auto">
           Prediction: {currency.format(metrics.projectedProfit)} monthly operating margin
@@ -268,10 +259,34 @@ const Dashboard = () => {
       {loading && <div className="border border-blue-100 bg-blue-50 p-3 text-sm text-blue-800">Loading dashboard metrics...</div>}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <KpiCard title="Active Revenue" value={currency.format(metrics.monthlyRevenue)} helper="Projected from active member fees" icon={<IndianRupee size={20} />} tone="blue" />
-        <KpiCard title="Operating Expense" value={currency.format(metrics.monthlyExpense)} helper="From Library Management ledger" icon={<BarChart3 size={20} />} tone="amber" />
-        <KpiCard title="Active Members" value={metrics.activeMembers.length} helper={`${metrics.joinedThisMonth} joined this month`} icon={<Users size={20} />} tone="emerald" />
-        <KpiCard title="At-Risk Payments" value={metrics.overdueMembers.length + metrics.dueMembers.length} helper={`${metrics.overdueMembers.length} overdue, ${metrics.dueMembers.length} due`} icon={<AlertTriangle size={20} />} tone="rose" />
+        <KpiCard
+          title="Active Revenue"
+          value={currency.format(metrics.monthlyRevenue)}
+          helper="Projected from active member fees"
+          icon={<IndianRupee size={20} />}
+          tone="blue"
+        />
+        <KpiCard
+          title="Operating Expense"
+          value={currency.format(metrics.monthlyExpense)}
+          helper="From Library Management ledger"
+          icon={<BarChart3 size={20} />}
+          tone="amber"
+        />
+        <KpiCard
+          title="Active Members"
+          value={metrics.activeMembers.length}
+          helper={`${metrics.joinedThisMonth} joined this month`}
+          icon={<Users size={20} />}
+          tone="emerald"
+        />
+        <KpiCard
+          title="At-Risk Payments"
+          value={metrics.overdueMembers.length + metrics.dueMembers.length}
+          helper={`${metrics.overdueMembers.length} overdue, ${metrics.dueMembers.length} due`}
+          icon={<AlertTriangle size={20} />}
+          tone="rose"
+        />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.8fr)]">
@@ -314,7 +329,7 @@ const Dashboard = () => {
           </div>
           <div className="space-y-4">
             <div className="border border-slate-200 bg-slate-50 p-4">
-              <p className="text-sm text-slate-500">Growth Rate</p>
+              <p className="text-sm text-slate-500">Seat Occupancy Growth</p>
               <div className="mt-2 flex items-end justify-between">
                 <span className="text-3xl font-bold text-slate-950">{metrics.growthRate}%</span>
                 <TrendingUp className="text-emerald-600" size={22} />

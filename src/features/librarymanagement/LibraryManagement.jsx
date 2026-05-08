@@ -5,7 +5,19 @@ import { ExpenseSummary } from "./ExpenseSummary";
 import { ExpenseTable } from "./ExpenseTable";
 import { ManagementStatCard } from "./ManagementStatCard";
 import { TodoPanel } from "./TodoPanel";
-import { createId, loadManagementData, saveManagementData } from "./libraryStorage";
+import {
+  createId,
+  loadManagementData,
+  saveManagementData,
+  loadExpensesFromDb,
+  loadTodosFromDb,
+  saveExpenseToDb,
+  deleteExpenseFromDb,
+  saveTodoToDb,
+  updateTodoInDb,
+  deleteTodoFromDb,
+  defaultCategories,
+} from "./libraryStorage";
 
 const currency = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -15,7 +27,30 @@ const currency = new Intl.NumberFormat("en-IN", {
 
 export const LibraryManagement = () => {
   const [managementData, setManagementData] = useState(loadManagementData);
-  const { categories, expenses, todos } = managementData;
+  const [expenses, setExpenses] = useState([]);
+  const [todos, setTodos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const { categories } = managementData;
+
+  // Load data from database on mount
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [dbExpenses, dbTodos] = await Promise.all([loadExpensesFromDb(), loadTodosFromDb()]);
+        setExpenses(dbExpenses);
+        setTodos(dbTodos);
+      } catch (error) {
+        console.error("Error loading data:", error);
+        // Fallback to localStorage
+        setExpenses(managementData.expenses);
+        setTodos(managementData.todos);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
 
   useEffect(() => {
     saveManagementData(managementData);
@@ -61,66 +96,100 @@ export const LibraryManagement = () => {
     return true;
   };
 
-  const addExpense = (expense) => {
+  const addExpense = async (expense) => {
     if (!expense.title.trim() || !expense.category || !expense.amount || expense.amount <= 0) {
       return false;
     }
 
-    setManagementData((previous) => ({
-      ...previous,
-      expenses: [
-        {
-          ...expense,
-          id: createId(),
-          title: expense.title.trim(),
-          note: expense.note.trim(),
-        },
-        ...previous.expenses,
-      ],
-    }));
-    return true;
+    try {
+      const savedExpense = await saveExpenseToDb(expense);
+
+      if (savedExpense) {
+        setExpenses((previous) => [savedExpense, ...previous]);
+        return true;
+      }
+    } catch (error) {
+      console.error("Error adding expense:", error);
+    }
+
+    return false;
   };
 
-  const deleteExpense = (expenseId) => {
-    setManagementData((previous) => ({
-      ...previous,
-      expenses: previous.expenses.filter((expense) => expense.id !== expenseId),
-    }));
+  const deleteExpense = async (expenseId) => {
+    try {
+      const deleted = await deleteExpenseFromDb(expenseId);
+
+      if (deleted) {
+        setExpenses((previous) => previous.filter((expense) => expense.id !== expenseId));
+      }
+    } catch (error) {
+      console.error("Error deleting expense:", error);
+    }
   };
 
-  const addTodo = (todo) => {
+  const addTodo = async (todo) => {
     if (!todo.title.trim()) {
       return false;
     }
 
-    setManagementData((previous) => ({
-      ...previous,
-      todos: [
-        {
-          ...todo,
-          id: createId(),
-          title: todo.title.trim(),
-          completed: false,
-        },
-        ...previous.todos,
-      ],
-    }));
-    return true;
+    try {
+      const savedTodo = await saveTodoToDb(todo);
+
+      if (savedTodo) {
+        setTodos((previous) => [
+          {
+            ...savedTodo,
+            dueDate: savedTodo.due_date || "",
+          },
+          ...previous,
+        ]);
+        return true;
+      }
+    } catch (error) {
+      console.error("Error adding todo:", error);
+    }
+
+    return false;
   };
 
-  const toggleTodo = (todoId) => {
-    setManagementData((previous) => ({
-      ...previous,
-      todos: previous.todos.map((todo) => (todo.id === todoId ? { ...todo, completed: !todo.completed } : todo)),
-    }));
+  const toggleTodo = async (todoId) => {
+    const todo = todos.find((t) => t.id === todoId);
+
+    if (todo) {
+      try {
+        const updated = await updateTodoInDb(todoId, { completed: !todo.completed });
+
+        if (updated) {
+          setTodos((previous) => previous.map((t) => (t.id === todoId ? { ...t, completed: !t.completed } : t)));
+        }
+      } catch (error) {
+        console.error("Error updating todo:", error);
+      }
+    }
   };
 
-  const deleteTodo = (todoId) => {
-    setManagementData((previous) => ({
-      ...previous,
-      todos: previous.todos.filter((todo) => todo.id !== todoId),
-    }));
+  const deleteTodo = async (todoId) => {
+    try {
+      const deleted = await deleteTodoFromDb(todoId);
+
+      if (deleted) {
+        setTodos((previous) => previous.filter((todo) => todo.id !== todoId));
+      }
+    } catch (error) {
+      console.error("Error deleting todo:", error);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900">Library Management</h2>
+          <p className="mt-1 text-sm text-slate-500">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

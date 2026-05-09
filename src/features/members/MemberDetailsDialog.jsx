@@ -1,12 +1,14 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { ArrowLeft, Pencil, X } from "lucide-react";
+import { ArrowLeft, FileImage, Pencil, X } from "lucide-react";
 import { SeatSelector } from "../seatmanagement/SeatSelector";
+import { getMemberFileSignedUrl } from "./memberFiles";
 
 const getEditableMemberData = (member) => ({
   fullName: member.fullName,
   dateOfBirth: member.dateOfBirth || "",
   phoneNumber: member.phoneNumber,
+  registeredEmail: member.registeredEmail || "",
   idType: member.idType,
   idNumber: member.idNumber,
   registrationDate: member.registrationDate,
@@ -17,6 +19,8 @@ const getEditableMemberData = (member) => ({
   paymentMethod: member.paymentMethod,
   transactionNotes: member.transactionNotes || "",
   paidUntil: member.paidUntil ?? "",
+  idDocumentPath: member.idDocumentPath || "",
+  passportPhotoPath: member.passportPhotoPath || "",
 });
 
 const getInitialLeftData = () => ({
@@ -33,11 +37,37 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isMarkingLeft, setIsMarkingLeft] = useState(false);
+  const [idDocumentFile, setIdDocumentFile] = useState(null);
+  const [passportPhotoFile, setPassportPhotoFile] = useState(null);
+  const [documentUrls, setDocumentUrls] = useState({ idDocument: "", passportPhoto: "" });
 
   const occupiedMembers = useMemo(() => members.filter((item) => item.id !== member?.id), [member?.id, members]);
   const occupiedSeats = useMemo(() => occupiedMembers.map((item) => item.seatNumber), [occupiedMembers]);
   const hasSeatChanged = Number(formData?.seatNumber) !== Number(member?.seatNumber);
   const canSubmitExit = !formData?.lockerTaken || (leftData.lockerSecurityRefunded && leftData.lockerKeysReturned);
+
+  useEffect(() => {
+    let ignore = false;
+
+    const loadDocumentUrls = async () => {
+      const [idDocument, passportPhoto] = await Promise.all([
+        getMemberFileSignedUrl(member?.idDocumentPath),
+        getMemberFileSignedUrl(member?.passportPhotoPath),
+      ]);
+
+      if (!ignore) {
+        setDocumentUrls({ idDocument, passportPhoto });
+      }
+    };
+
+    if (member) {
+      loadDocumentUrls();
+    }
+
+    return () => {
+      ignore = true;
+    };
+  }, [member]);
 
   if (!member || !formData) return null;
 
@@ -72,6 +102,8 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
     setFormData(getEditableMemberData(member));
     setLeftData(getInitialLeftData());
     setNotice({ tone: "", message: "" });
+    setIdDocumentFile(null);
+    setPassportPhotoFile(null);
     setIsEditing(true);
   };
 
@@ -79,6 +111,8 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
     setFormData(getEditableMemberData(member));
     setLeftData(getInitialLeftData());
     setNotice({ tone: "", message: "" });
+    setIdDocumentFile(null);
+    setPassportPhotoFile(null);
     setIsEditing(false);
   };
 
@@ -87,6 +121,8 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
       setFormData(getEditableMemberData(member));
       setLeftData(getInitialLeftData());
       setNotice({ tone: "", message: "" });
+      setIdDocumentFile(null);
+      setPassportPhotoFile(null);
       setIsEditing(false);
     }
 
@@ -107,7 +143,11 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
     }
 
     setIsSaving(true);
-    const didSave = await onSave(member.id, formData);
+    const didSave = await onSave(member.id, {
+      ...formData,
+      idDocumentFile,
+      passportPhotoFile,
+    });
     setIsSaving(false);
 
     if (!didSave) {
@@ -186,6 +226,7 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
                 {[
                   ["Full Name", member.fullName],
                   ["Phone Number", member.phoneNumber],
+                  ["Registered Email", member.registeredEmail || "Not added"],
                   ["Date of Birth", member.dateOfBirth || "Not added"],
                   ["Registration Date", member.registrationDate],
                   ["ID Type", member.idType],
@@ -195,6 +236,7 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
                   ["Fee Amount", member.feeAmount ? `Rs.${member.feeAmount}` : "Not added"],
                   ["Payment Method", member.paymentMethod || "Not added"],
                   ["Paid Until", member.paidUntil || "Not added"],
+                  ["ID Document", member.idDocumentPath ? "Uploaded" : "Not uploaded"],
                   ["Transaction Notes", member.transactionNotes || "Not added"],
                 ].map(([label, value]) => (
                   <div key={label} className="rounded-md border border-slate-200 bg-slate-50 p-3">
@@ -202,6 +244,46 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
                     <div className="mt-1 break-words text-sm font-medium text-slate-900">{value}</div>
                   </div>
                 ))}
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="rounded-md border border-slate-200 p-3">
+                  <div className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-800">
+                    <FileImage size={16} />
+                    ID Document
+                  </div>
+                  {documentUrls.idDocument ? (
+                    <a
+                      href={documentUrls.idDocument}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
+                    >
+                      View Uploaded ID
+                    </a>
+                  ) : (
+                    <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
+                      ID document not uploaded.
+                    </div>
+                  )}
+                </div>
+                <div className="rounded-md border border-slate-200 p-3">
+                  <div className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-800">
+                    <FileImage size={16} />
+                    Passport Photo
+                  </div>
+                  {documentUrls.passportPhoto ? (
+                    <img
+                      src={documentUrls.passportPhoto}
+                      alt={`${member.fullName} passport size`}
+                      className="h-28 w-24 rounded-md border border-slate-200 object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-28 w-24 items-center justify-center rounded-md border border-slate-200 bg-slate-100 text-xl font-bold text-slate-500">
+                      {member.fullName?.charAt(0)?.toUpperCase() || "M"}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="flex justify-end border-t pt-4">
@@ -236,6 +318,16 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
                       value={formData.phoneNumber}
                       onChange={handleChange}
                       required
+                      className="w-full rounded-md border p-2 outline-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">Registered Email</label>
+                    <input
+                      type="email"
+                      name="registeredEmail"
+                      value={formData.registeredEmail}
+                      onChange={handleChange}
                       className="w-full rounded-md border p-2 outline-blue-500"
                     />
                   </div>
@@ -324,6 +416,31 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
                     onChange={handleChange}
                     className="w-full rounded-md border p-2 outline-blue-500"
                   />
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 border-t pt-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-sm font-bold text-slate-700">ID Document Photo</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(event) => setIdDocumentFile(event.target.files?.[0] ?? null)}
+                      className="w-full rounded-md border border-slate-200 bg-white p-2 text-sm"
+                    />
+                    <p className={`mt-1 text-xs ${formData.idDocumentPath ? "text-slate-500" : "font-semibold text-red-700"}`}>
+                      {formData.idDocumentPath ? "Upload a new image only if you want to replace it." : "Missing for this member. Please upload it."}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-bold text-slate-700">Passport Size Photo</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(event) => setPassportPhotoFile(event.target.files?.[0] ?? null)}
+                      className="w-full rounded-md border border-slate-200 bg-white p-2 text-sm"
+                    />
+                    <p className="mt-1 text-xs text-slate-500">Optional. The table will use a fallback photo if empty.</p>
+                  </div>
                 </div>
 
                 <div className="flex flex-col justify-end gap-2 border-t pt-4 sm:flex-row">

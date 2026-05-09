@@ -5,6 +5,7 @@ import supabase from "../../../helpers/supabase";
 import { AddMemberDialog } from "./AddMemberDialog";
 import { MemberForm } from "./MemberForm";
 import { MembersTable } from "./MembersTable";
+import { uploadMemberFile } from "./memberFiles";
 import { mapMemberFromDb, getPaymentStatus } from "./memberUtils";
 import { exportMembersToExcel } from "./memberExport";
 
@@ -76,12 +77,29 @@ export const Members = () => {
   const handleSaveMember = async (memberId, formData) => {
     setErrorMessage("");
 
+    let idDocumentPath = formData.idDocumentPath;
+    let passportPhotoPath = formData.passportPhotoPath;
+
+    try {
+      if (formData.idDocumentFile) {
+        idDocumentPath = await uploadMemberFile(memberId, formData.idDocumentFile, "id-document");
+      }
+
+      if (formData.passportPhotoFile) {
+        passportPhotoPath = await uploadMemberFile(memberId, formData.passportPhotoFile, "passport-photo");
+      }
+    } catch (error) {
+      setErrorMessage(`Could not upload member photo document: ${error.message}`);
+      return false;
+    }
+
     const { error } = await supabase
       .from("library_members")
       .update({
         full_name: formData.fullName,
         date_of_birth: formData.dateOfBirth || null,
         phone_number: formData.phoneNumber,
+        registered_email: formData.registeredEmail || null,
         id_type: formData.idType,
         id_number: formData.idNumber,
         registration_date: formData.registrationDate,
@@ -92,6 +110,8 @@ export const Members = () => {
         payment_method: formData.paymentMethod,
         transaction_notes: formData.transactionNotes || null,
         paid_until: formData.paidUntil,
+        id_document_path: idDocumentPath || null,
+        passport_photo_path: passportPhotoPath || null,
       })
       .eq("id", memberId);
 
@@ -140,6 +160,7 @@ export const Members = () => {
   };
 
   const occupiedSeats = useMemo(() => members.map((member) => member.seatNumber), [members]);
+  const membersMissingIdDocument = useMemo(() => members.filter((member) => !member.idDocumentPath).length, [members]);
   const filteredMembers = useMemo(() => {
     let result = members;
 
@@ -147,7 +168,7 @@ export const Members = () => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
     if (normalizedQuery) {
       result = result.filter((member) =>
-        [member.fullName, member.phoneNumber, member.seatNumber, member.seatFloor, member.idNumber]
+        [member.fullName, member.phoneNumber, member.registeredEmail, member.seatNumber, member.seatFloor, member.idNumber]
           .filter(Boolean)
           .some((value) => String(value).toLowerCase().includes(normalizedQuery)),
       );
@@ -201,6 +222,12 @@ export const Members = () => {
       </div>
 
       {errorMessage && <div className="border border-red-200 bg-red-50 p-3 text-sm text-red-700">{errorMessage}</div>}
+      {membersMissingIdDocument > 0 && (
+        <div className="rounded-md border border-amber-100 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+          {membersMissingIdDocument} active member{membersMissingIdDocument === 1 ? "" : "s"} missing ID document upload. Open their details and use
+          Edit Details to add it.
+        </div>
+      )}
       <MembersTable
         members={filteredMembers}
         loading={loading}

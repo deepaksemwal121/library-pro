@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import supabase from "../../../helpers/supabase";
 import { SeatManagement } from "../seatmanagement/SeatManagement";
 import { getSeatBaseFeeFromSettings } from "../seatmanagement/seatSettings";
+import { uploadMemberFile } from "./memberFiles";
 import { getEndOfMonth } from "./memberUtils";
 
 const LOCKER_FEE = 500;
@@ -27,6 +28,7 @@ const initialFormData = {
   fullName: "",
   dateOfBirth: "",
   phoneNumber: "",
+  registeredEmail: "",
   idType: "Aadhar",
   idNumber: "",
   registrationDate: "",
@@ -47,6 +49,8 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
   const [submitError, setSubmitError] = useState("");
   const [submitSuccess, setSubmitSuccess] = useState("");
   const [formVersion, setFormVersion] = useState(0);
+  const [idDocumentFile, setIdDocumentFile] = useState(null);
+  const [passportPhotoFile, setPassportPhotoFile] = useState(null);
 
   const feeBreakdown = useMemo(() => {
     if (!formData.seatNumber) {
@@ -109,14 +113,34 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
       return;
     }
 
+    if (!idDocumentFile) {
+      setSubmitError("Please upload the member's ID document photo before submitting.");
+      return;
+    }
+
     setIsSubmitting(true);
+
+    const memberId = crypto.randomUUID();
+    let idDocumentPath = "";
+    let passportPhotoPath = "";
+
+    try {
+      idDocumentPath = await uploadMemberFile(memberId, idDocumentFile, "id-document");
+      passportPhotoPath = await uploadMemberFile(memberId, passportPhotoFile, "passport-photo");
+    } catch (error) {
+      setIsSubmitting(false);
+      setSubmitError(`Could not upload member photo document: ${error.message}`);
+      return;
+    }
 
     const { data, error } = await supabase
       .from("library_members")
       .insert({
+        id: memberId,
         full_name: formData.fullName,
         date_of_birth: formData.dateOfBirth || null,
         phone_number: formData.phoneNumber,
+        registered_email: formData.registeredEmail || null,
         id_type: formData.idType,
         id_number: formData.idNumber,
         registration_date: formData.registrationDate,
@@ -127,6 +151,8 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
         payment_method: formData.paymentMethod,
         transaction_notes: formData.transactionNotes || null,
         paid_until: getEndOfMonth(formData.registrationDate),
+        id_document_path: idDocumentPath,
+        passport_photo_path: passportPhotoPath,
       })
       .select("id")
       .single();
@@ -141,33 +167,39 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
       return;
     }
 
-    // Record the registration fee payment
-    const registrationFeeAmount = Number(formData.feeAmount);
-    const { error: paymentError } = await supabase.from("payment_history").insert({
-      member_id: data.id,
-      amount: registrationFeeAmount,
-      payment_for_month: formData.registrationDate,
-      payment_method: formData.paymentMethod,
-      payment_type: "Registration Fee",
-      transaction_notes: formData.transactionNotes ? `Registration: ${formData.transactionNotes}` : "Registration Fee",
-    });
+    const totalRegistrationAmount = Number(formData.feeAmount);
+    const lockerFeeAmount = formData.lockerTaken ? LOCKER_FEE : 0;
+    const monthlyFeeAmount = totalRegistrationAmount - lockerFeeAmount;
 
-    // Record locker security deposit if locker is taken
-    if (formData.lockerTaken) {
-      const LOCKER_SECURITY = 500;
-      const { error: lockerPaymentError } = await supabase.from("payment_history").insert({
+    if (monthlyFeeAmount < 0) {
+      setIsSubmitting(false);
+      setSubmitError("Fee amount cannot be less than the locker fee.");
+      return;
+    }
+
+    const paymentRecords = [
+      {
         member_id: data.id,
-        amount: LOCKER_SECURITY,
+        amount: monthlyFeeAmount,
         payment_for_month: formData.registrationDate,
         payment_method: formData.paymentMethod,
-        payment_type: "Locker Security",
-        transaction_notes: "Locker Security Deposit - Refundable",
-      });
+        payment_type: "Monthly Fee",
+        transaction_notes: formData.transactionNotes ? `Registration monthly fee: ${formData.transactionNotes}` : "Registration monthly fee",
+      },
+    ];
 
-      if (lockerPaymentError) {
-        console.error("Failed to record locker security deposit:", lockerPaymentError);
-      }
+    if (formData.lockerTaken) {
+      paymentRecords.push({
+        member_id: data.id,
+        amount: lockerFeeAmount,
+        payment_for_month: formData.registrationDate,
+        payment_method: formData.paymentMethod,
+        payment_type: "Locker Fee",
+        transaction_notes: "Registration locker fee",
+      });
     }
+
+    const { error: paymentError } = await supabase.from("payment_history").insert(paymentRecords);
 
     setIsSubmitting(false);
 
@@ -179,8 +211,10 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
       return;
     }
 
-    setSubmitSuccess("Member registered successfully and payment recorded.");
+    setSubmitSuccess("Member registered successfully and payment records created.");
     setFormData({ ...initialFormData });
+    setIdDocumentFile(null);
+    setPassportPhotoFile(null);
     setFormVersion((version) => version + 1);
     onMemberCreated();
   };
@@ -226,6 +260,17 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
               required
               className="w-full border rounded-md p-2 outline-blue-500"
               placeholder="Enter phone number"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Registered Email</label>
+            <input
+              type="email"
+              name="registeredEmail"
+              value={formData.registeredEmail}
+              onChange={handleChange}
+              className="w-full border rounded-md p-2 outline-blue-500"
+              placeholder="member@example.com"
             />
           </div>
         </div>
@@ -348,6 +393,32 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
               className="w-full border rounded-md p-2 outline-blue-500"
               placeholder="Enter transaction notes"
             />
+          </div>
+        </div>
+
+        <div className="pt-4 border-t mt-4 space-y-4">
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-1">ID Document Photo</label>
+            <input
+              key={`id-document-${formVersion}`}
+              type="file"
+              accept="image/*"
+              onChange={(event) => setIdDocumentFile(event.target.files?.[0] ?? null)}
+              required
+              className="w-full rounded-md border border-red-200 bg-red-50 p-2 text-sm"
+            />
+            <p className="mt-1 text-xs text-red-700">Required for every new member registration.</p>
+          </div>
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-1">Passport Size Photo</label>
+            <input
+              key={`passport-photo-${formVersion}`}
+              type="file"
+              accept="image/*"
+              onChange={(event) => setPassportPhotoFile(event.target.files?.[0] ?? null)}
+              className="w-full rounded-md border border-slate-200 bg-white p-2 text-sm"
+            />
+            <p className="mt-1 text-xs text-slate-500">Optional. A fallback photo will be shown if this is not uploaded.</p>
           </div>
         </div>
 

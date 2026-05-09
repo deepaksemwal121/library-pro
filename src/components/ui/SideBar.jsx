@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, Grid2x2Check, Settings, LogOut, Command } from "lucide-react";
+import { BadgeCheck, LayoutDashboard, Users, Grid2x2Check, Settings, LogOut, Command } from "lucide-react";
 import { NavLink, useNavigate } from "react-router";
 import supabase from "../../../helpers/supabase";
 
@@ -7,6 +7,7 @@ const Sidebar = () => {
   const menuItems = [
     { path: "/dashboard", name: "Dashboard", icon: <LayoutDashboard size={20} /> },
     { path: "/members", name: "Members", icon: <Users size={20} /> },
+    { path: "/membership-cards", name: "Cards", icon: <BadgeCheck size={20} /> },
     { path: "/seat-management", name: "Seat Management", icon: <Grid2x2Check size={20} /> },
     { path: "/library-management", name: "Library Management", icon: <Command size={20} /> },
     { path: "/settings", name: "Settings", icon: <Settings size={20} /> },

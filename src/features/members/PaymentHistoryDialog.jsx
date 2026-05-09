@@ -290,6 +290,7 @@ export const PaymentHistoryDialog = ({ member, open, onOpenChange, onPaymentAdde
                   >
                     <option value="Registration Fee">Registration Fee</option>
                     <option value="Monthly Fee">Monthly Fee</option>
+                    <option value="Locker Fee">Locker Fee</option>
                     <option value="Locker Security">Locker Security Deposit</option>
                     <option value="Other">Other</option>
                   </select>

@@ -403,11 +403,12 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
               key={`id-document-${formVersion}`}
               type="file"
               accept="image/*"
+              capture="environment"
               onChange={(event) => setIdDocumentFile(event.target.files?.[0] ?? null)}
               required
               className="w-full rounded-md border border-red-200 bg-red-50 p-2 text-sm"
             />
-            <p className="mt-1 text-xs text-red-700">Required for every new member registration.</p>
+            <p className="mt-1 text-xs text-red-700">Required for every new member registration. Tap to use camera on mobile/tablet.</p>
           </div>
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-1">Passport Size Photo</label>
@@ -415,10 +416,11 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
               key={`passport-photo-${formVersion}`}
               type="file"
               accept="image/*"
+              capture="user"
               onChange={(event) => setPassportPhotoFile(event.target.files?.[0] ?? null)}
               className="w-full rounded-md border border-slate-200 bg-white p-2 text-sm"
             />
-            <p className="mt-1 text-xs text-slate-500">Optional. A fallback photo will be shown if this is not uploaded.</p>
+            <p className="mt-1 text-xs text-slate-500">Optional. A fallback photo will be shown if this is not uploaded. Tap to use selfie camera on mobile/tablet.</p>
           </div>
         </div>
 

@@ -164,7 +164,6 @@ export const Members = () => {
   const filteredMembers = useMemo(() => {
     let result = members;
 
-    
     const normalizedQuery = searchQuery.trim().toLowerCase();
     if (normalizedQuery) {
       result = result.filter((member) =>
@@ -217,15 +216,15 @@ export const Members = () => {
           className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700"
         >
           <Download size={18} />
-          Download Excel
+          Export
         </button>
       </div>
 
       {errorMessage && <div className="border border-red-200 bg-red-50 p-3 text-sm text-red-700">{errorMessage}</div>}
       {membersMissingIdDocument > 0 && (
         <div className="rounded-md border border-amber-100 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
-          {membersMissingIdDocument} active member{membersMissingIdDocument === 1 ? "" : "s"} missing ID document upload. Open their details and use
-          Edit Details to add it.
+          {membersMissingIdDocument} active member{membersMissingIdDocument === 1 ? "" : "s"} missing ID document upload. Open their details
+          and use Edit Details to add it.
         </div>
       )}
       <MembersTable

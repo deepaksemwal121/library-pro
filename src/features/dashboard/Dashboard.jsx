@@ -3,7 +3,7 @@ import { AlertTriangle, ArrowUpRight, BarChart3, Brain, IndianRupee, Target, Tre
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import supabase from "../../../helpers/supabase";
 import { loadManagementData } from "../librarymanagement/libraryStorage";
-import { getPaymentStatus, mapMemberFromDb } from "../members/memberUtils";
+import { getExitReasonLabel, getPaymentStatus, mapMemberFromDb } from "../members/memberUtils";
 
 const currency = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -112,7 +112,6 @@ const Dashboard = () => {
     const overdueMembers = activeMembers.filter((member) => getPaymentStatus(member.paidUntil).tone === "red");
     const dueMembers = activeMembers.filter((member) => getPaymentStatus(member.paidUntil).tone === "yellow");
     const joinedThisMonth = members.filter((member) => isSameMonth(member.registrationDate, 0)).length;
-    const joinedLastMonth = members.filter((member) => isSameMonth(member.registrationDate, -1)).length;
 
     // Calculate seat occupancy growth rate (active members this month vs last month)
     const occupiedSeatsThisMonth = activeMembers.length;
@@ -183,13 +182,14 @@ const Dashboard = () => {
 
   const exitReasons = useMemo(() => {
     const grouped = metrics.inactiveMembers.reduce((result, member) => {
-      const reason = member.exitNotes?.trim() || "No reason recorded";
-      result[reason] = (result[reason] || 0) + 1;
+      const reason = getExitReasonLabel(member.exitNotes);
+      const key = reason.toLowerCase();
+      const current = result.get(key) || { reason, count: 0 };
+      result.set(key, { ...current, count: current.count + 1 });
       return result;
-    }, {});
+    }, new Map());
 
-    return Object.entries(grouped)
-      .map(([reason, count]) => ({ reason, count }))
+    return Array.from(grouped.values())
       .sort((first, second) => second.count - first.count)
       .slice(0, 5);
   }, [metrics.inactiveMembers]);

@@ -45,35 +45,31 @@ export async function getCurrentUserProfile() {
       return null;
     }
 
-    // Fetch user profile with role information
     const { data, error } = await supabase
       .from("user_profiles")
-      .select(
-        `
-        id,
-        library_id,
-        full_name,
-        email,
-        user_roles (
-          role_name
-        )
-      `
-      )
+      .select("id, full_name, email, role")
       .eq("id", authUser.id)
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error("Error fetching user profile:", error);
-      return null;
+      return {
+        id: authUser.id,
+        libraryId: null,
+        role: "manager",
+        fullName: authUser.user_metadata?.full_name || authUser.email,
+        email: authUser.email,
+        isAdmin: false,
+      };
     }
 
     const profile = {
-      id: data.id,
-      libraryId: data.library_id,
-      role: data.user_roles?.role_name || "staff",
-      fullName: data.full_name || authUser.email,
-      email: data.email || authUser.email,
-      isAdmin: data.library_id === null, // Admin has NULL library_id
+      id: data?.id || authUser.id,
+      libraryId: null,
+      role: data?.role || "manager",
+      fullName: data?.full_name || authUser.user_metadata?.full_name || authUser.email,
+      email: data?.email || authUser.email,
+      isAdmin: data?.role === "admin",
     };
 
     // Cache the profile
@@ -105,7 +101,7 @@ export async function getCurrentLibraryId() {
  */
 export async function getUserRole() {
   const profile = await getCurrentUserProfile();
-  return profile?.role || "staff";
+  return profile?.role || "manager";
 }
 
 /**

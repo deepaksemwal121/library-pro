@@ -50,6 +50,7 @@ export const MembersTable = ({
   emptyMessage = "No members registered yet.",
   onSaveMember = () => {},
   onMarkLeft = () => {},
+  onPaymentsChanged = () => {},
 }) => {
   const [selectedMember, setSelectedMember] = useState(null);
   const [selectedMemberForPayment, setSelectedMemberForPayment] = useState(null);
@@ -215,6 +216,7 @@ export const MembersTable = ({
         member={selectedMemberForPayment}
         open={Boolean(selectedMemberForPayment)}
         onOpenChange={(isOpen) => !isOpen && setSelectedMemberForPayment(null)}
+        onPaymentsChanged={onPaymentsChanged}
       />
     </>
   );

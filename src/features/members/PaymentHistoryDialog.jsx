@@ -3,7 +3,34 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { X, Plus, Trash2 } from "lucide-react";
 import supabase from "../../../helpers/supabase";
 
-export const PaymentHistoryDialog = ({ member, open, onOpenChange, onPaymentAdded = () => {} }) => {
+const MEMBERSHIP_PAYMENT_TYPES = ["Registration Fee", "Monthly Fee"];
+
+const formatLocalDate = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const getEndOfMonth = (dateValue) => {
+  const date = new Date(`${dateValue}T00:00:00`);
+  return formatLocalDate(new Date(date.getFullYear(), date.getMonth() + 1, 0));
+};
+
+const getYesterdayDate = () => {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() - 1);
+  return formatLocalDate(date);
+};
+
+export const PaymentHistoryDialog = ({
+  member,
+  open,
+  onOpenChange,
+  onPaymentAdded = () => {},
+  onPaymentsChanged = onPaymentAdded,
+}) => {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -96,11 +123,9 @@ export const PaymentHistoryDialog = ({ member, open, onOpenChange, onPaymentAdde
     });
 
     // Update member's paid_until if needed, always fetch latest
-    if (!error) {
+    if (!error && MEMBERSHIP_PAYMENT_TYPES.includes(formData.paymentType)) {
       try {
-        const paymentDate = new Date(`${formData.paymentForMonth}T00:00:00`);
-        const endOfMonth = new Date(paymentDate.getFullYear(), paymentDate.getMonth() + 1, 0);
-        const requestedPaidUntil = formData.paidUntil || endOfMonth.toISOString().slice(0, 10);
+        const requestedPaidUntil = formData.paidUntil || getEndOfMonth(formData.paymentForMonth);
         const requestedPaidUntilDate = new Date(`${requestedPaidUntil}T00:00:00`);
 
         // Fetch latest member paid_until
@@ -147,7 +172,7 @@ export const PaymentHistoryDialog = ({ member, open, onOpenChange, onPaymentAdde
     });
     setShowAddForm(false);
     await refreshPaymentHistory();
-    onPaymentAdded();
+    onPaymentsChanged();
   };
 
   const handleDeletePayment = async (paymentId) => {
@@ -155,6 +180,7 @@ export const PaymentHistoryDialog = ({ member, open, onOpenChange, onPaymentAdde
       return;
     }
 
+    const paymentToDelete = payments.find((payment) => payment.id === paymentId);
     const { error } = await supabase.from("payment_history").delete().eq("id", paymentId);
 
     if (error) {
@@ -162,8 +188,39 @@ export const PaymentHistoryDialog = ({ member, open, onOpenChange, onPaymentAdde
       return;
     }
 
+    if (MEMBERSHIP_PAYMENT_TYPES.includes(paymentToDelete?.payment_type || "Monthly Fee")) {
+      const { data: latestMembershipPayment, error: latestPaymentError } = await supabase
+        .from("payment_history")
+        .select("payment_for_month")
+        .eq("member_id", member.id)
+        .in("payment_type", MEMBERSHIP_PAYMENT_TYPES)
+        .order("payment_for_month", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (latestPaymentError) {
+        setNotice({ tone: "error", message: latestPaymentError.message });
+        return;
+      }
+
+      const recalculatedPaidUntil = latestMembershipPayment?.payment_for_month
+        ? getEndOfMonth(latestMembershipPayment.payment_for_month)
+        : getYesterdayDate();
+
+      const { error: memberUpdateError } = await supabase
+        .from("library_members")
+        .update({ paid_until: recalculatedPaidUntil })
+        .eq("id", member.id);
+
+      if (memberUpdateError) {
+        setNotice({ tone: "error", message: memberUpdateError.message });
+        return;
+      }
+    }
+
     setNotice({ tone: "success", message: "Payment deleted successfully." });
     await refreshPaymentHistory();
+    onPaymentsChanged();
   };
 
   const formatDate = (dateString) => {

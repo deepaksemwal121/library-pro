@@ -3,6 +3,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { ArrowLeft, FileImage, Pencil, X } from "lucide-react";
 import { SeatSelector } from "../seatmanagement/SeatSelector";
 import { getMemberFileSignedUrl } from "./memberFiles";
+import { EXIT_REASON_OPTIONS } from "./memberUtils";
 
 const getEditableMemberData = (member) => ({
   fullName: member.fullName,
@@ -27,6 +28,7 @@ const getInitialLeftData = () => ({
   leftAt: new Date().toISOString().slice(0, 10),
   lockerSecurityRefunded: false,
   lockerKeysReturned: false,
+  exitReason: "",
   exitNotes: "",
 });
 
@@ -161,13 +163,21 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
       return;
     }
 
+    if (!leftData.exitReason && !leftData.exitNotes.trim()) {
+      setNotice({ tone: "error", message: "Please select or write a reason before marking this member left." });
+      return;
+    }
+
     if (!canSubmitExit) {
       setNotice({ tone: "error", message: "Locker members must collect security refund and submit locker keys before removal." });
       return;
     }
 
     setIsMarkingLeft(true);
-    const didMarkLeft = await onMarkLeft(member.id, leftData);
+    const didMarkLeft = await onMarkLeft(member.id, {
+      ...leftData,
+      exitNotes: leftData.exitNotes.trim() || leftData.exitReason,
+    });
     setIsMarkingLeft(false);
 
     if (!didMarkLeft) {
@@ -508,13 +518,34 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
                     </label>
                   </div>
                 </div>
-                <textarea
-                  name="exitNotes"
-                  value={leftData.exitNotes}
-                  onChange={handleLeftChange}
-                  className="mt-3 min-h-20 w-full rounded-md border p-2 outline-blue-500"
-                  placeholder="Exit notes"
-                />
+                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">Leaving Reason</label>
+                    <select
+                      name="exitReason"
+                      value={leftData.exitReason}
+                      onChange={handleLeftChange}
+                      className="w-full rounded-md border bg-white p-2 outline-blue-500"
+                    >
+                      <option value="">Select reason</option>
+                      {EXIT_REASON_OPTIONS.map((reason) => (
+                        <option key={reason} value={reason}>
+                          {reason}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">Custom Reason</label>
+                    <input
+                      name="exitNotes"
+                      value={leftData.exitNotes}
+                      onChange={handleLeftChange}
+                      className="w-full rounded-md border p-2 outline-blue-500"
+                      placeholder="Write a specific reason"
+                    />
+                  </div>
+                </div>
                 <button
                   type="button"
                   onClick={handleMarkLeft}

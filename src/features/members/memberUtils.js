@@ -38,6 +38,38 @@ export const getPaymentStatus = (paidUntilValue) => {
   };
 };
 
+export const EXIT_REASON_OPTIONS = [
+  "Cracked government exam",
+  "Shifting to some other place",
+  "Not preparing anymore",
+  "Got married",
+];
+
+const normalizeReasonText = (value) => value?.trim().replace(/\s+/g, " ") || "";
+
+const reasonAliases = EXIT_REASON_OPTIONS.reduce((result, reason) => {
+  result[reason.toLowerCase()] = reason;
+  return result;
+}, {
+  "cracked goverment exam": "Cracked government exam",
+  "cracked government exam": "Cracked government exam",
+  "shifted to some other place": "Shifting to some other place",
+  "shifting other place": "Shifting to some other place",
+  "not preparing any more": "Not preparing anymore",
+  "get married": "Got married",
+  "got married": "Got married",
+});
+
+export const getExitReasonLabel = (reasonValue) => {
+  const reason = normalizeReasonText(reasonValue);
+
+  if (!reason) {
+    return "No reason recorded";
+  }
+
+  return reasonAliases[reason.toLowerCase()] || reason;
+};
+
 export const mapMemberFromDb = (member) => ({
   id: member.id,
   fullName: member.full_name,

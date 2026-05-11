@@ -164,7 +164,7 @@ export const Members = () => {
   const filteredMembers = useMemo(() => {
     let result = members;
 
-    // Apply search filter
+    
     const normalizedQuery = searchQuery.trim().toLowerCase();
     if (normalizedQuery) {
       result = result.filter((member) =>
@@ -240,6 +240,7 @@ export const Members = () => {
         }
         onSaveMember={handleSaveMember}
         onMarkLeft={handleMarkLeft}
+        onPaymentsChanged={fetchMembers}
       />
     </div>
   );

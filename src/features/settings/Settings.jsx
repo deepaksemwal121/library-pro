@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Building2, ImageUp, Save, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
-import { getReadableTextColor, loadLibrarySettings, saveLibrarySettings } from "./librarySettings";
+import { getReadableTextColor, fetchLibrarySettings, saveLibrarySettings } from "./librarySettings";
 import {
   ROLE_OPTIONS,
   addUserProfile,
@@ -56,7 +56,13 @@ const getDominantLogoColor = (dataUrl) =>
   });
 
 export const Settings = () => {
-  const [formData, setFormData] = useState(loadLibrarySettings);
+  const [formData, setFormData] = useState({
+    libraryName: "Library Pro",
+    logoDataUrl: "",
+    themeColor: "#2563eb",
+  });
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [notice, setNotice] = useState("");
   const [uploadError, setUploadError] = useState("");
   const [profileNotice, setProfileNotice] = useState({ tone: "", text: "" });
@@ -77,6 +83,23 @@ export const Settings = () => {
     role: "manager",
   });
 
+  const loadSettings = async () => {
+    setIsLoadingSettings(true);
+    try {
+      const settings = await fetchLibrarySettings();
+      setFormData(settings);
+    } catch (error) {
+      setNotice(`Error loading settings: ${error.message}`);
+      setFormData({
+        libraryName: "Library Pro",
+        logoDataUrl: "",
+        themeColor: "#2563eb",
+      });
+    } finally {
+      setIsLoadingSettings(false);
+    }
+  };
+
   const refreshProfiles = async () => {
     setIsLoadingProfiles(true);
     try {
@@ -95,14 +118,24 @@ export const Settings = () => {
   };
 
   useEffect(() => {
+    loadSettings();
     refreshProfiles();
   }, []);
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
-    const savedSettings = saveLibrarySettings(formData);
-    setFormData(savedSettings);
-    setNotice("Library name updated.");
+    setNotice("");
+    setIsSavingSettings(true);
+
+    try {
+      const savedSettings = await saveLibrarySettings(formData);
+      setFormData(savedSettings);
+      setNotice("✓ Library settings saved and synced across devices.");
+    } catch (error) {
+      setNotice(`Error saving settings: ${error.message}`);
+    } finally {
+      setIsSavingSettings(false);
+    }
   };
 
   const handleSaveAdminProfile = async (event) => {
@@ -127,9 +160,10 @@ export const Settings = () => {
       notifyUserProfileUpdated();
       setProfileNotice({
         tone: "success",
-        text: currentUserForm.email !== currentUserProfile?.email
-          ? "Profile updated. Supabase may send a confirmation email before the login email changes."
-          : "Profile updated in database.",
+        text:
+          currentUserForm.email !== currentUserProfile?.email
+            ? "Profile updated. Supabase may send a confirmation email before the login email changes."
+            : "Profile updated in database.",
       });
     } catch (error) {
       setProfileNotice({ tone: "error", text: error.message });
@@ -216,91 +250,102 @@ export const Settings = () => {
     <div className="max-w-3xl space-y-6">
       <div>
         <h2 className="text-2xl font-bold text-slate-900">Settings</h2>
-        <p className="mt-1 text-sm text-slate-500">Manage how your library appears across the admin workspace.</p>
+        <p className="mt-1 text-sm text-slate-500">
+          Manage how your library appears across the admin workspace. Changes sync to all your devices.
+        </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-        <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-800">
-          <Building2 size={18} className="text-blue-600" />
-          Library Profile
+      {isLoadingSettings ? (
+        <div className="flex items-center justify-center rounded-md border border-slate-200 bg-white p-8">
+          <span className="text-sm text-slate-600">Loading settings...</span>
         </div>
-
-        <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="library-name">
-          Library name
-        </label>
-        <input
-          id="library-name"
-          type="text"
-          value={formData.libraryName}
-          onChange={(event) => {
-            setFormData((previous) => ({ ...previous, libraryName: event.target.value }));
-            setNotice("");
-          }}
-          className="w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-blue-500"
-          placeholder="Library Pro"
-        />
-        <p className="mt-1 text-xs text-slate-500">This name appears next to the logo in the sidebar.</p>
-
-        <div className="mt-5 grid gap-4 sm:grid-cols-[96px_minmax(0,1fr)]">
-          <div
-            className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-md border border-slate-200"
-            style={{ backgroundColor: formData.themeColor, color: getReadableTextColor(formData.themeColor) }}
-          >
-            {formData.logoDataUrl ? (
-              <img src={formData.logoDataUrl} alt={`${formData.libraryName} logo`} className="h-full w-full object-cover" />
-            ) : (
-              <Building2 size={34} />
-            )}
+      ) : formData ? (
+        <form onSubmit={handleSubmit} className="border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-800">
+            <Building2 size={18} className="text-blue-600" />
+            Library Profile
           </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="library-logo">
-              Library logo
-            </label>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <label
-                htmlFor="library-logo"
-                className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                <ImageUp size={16} />
-                Upload Logo
-              </label>
-              <input id="library-logo" type="file" accept="image/*" className="sr-only" onChange={handleLogoUpload} />
-              {formData.logoDataUrl && (
-                <button
-                  type="button"
-                  onClick={handleRemoveLogo}
-                  className="inline-flex items-center justify-center gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100"
-                >
-                  <Trash2 size={16} />
-                  Remove
-                </button>
+
+          <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="library-name">
+            Library name
+          </label>
+          <input
+            id="library-name"
+            type="text"
+            value={formData.libraryName}
+            onChange={(event) => {
+              setFormData((previous) => ({ ...previous, libraryName: event.target.value }));
+              setNotice("");
+            }}
+            className="w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-blue-500"
+            placeholder="Library Pro"
+          />
+          <p className="mt-1 text-xs text-slate-500">This name appears next to the logo in the sidebar.</p>
+
+          <div className="mt-5 grid gap-4 sm:grid-cols-[96px_minmax(0,1fr)]">
+            <div
+              className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-md border border-slate-200"
+              style={{ backgroundColor: formData.themeColor, color: getReadableTextColor(formData.themeColor) }}
+            >
+              {formData.logoDataUrl ? (
+                <img src={formData.logoDataUrl} alt={`${formData.libraryName} logo`} className="h-full w-full object-cover" />
+              ) : (
+                <Building2 size={34} />
               )}
             </div>
-            <p className="mt-1 text-xs text-slate-500">The sidebar theme color is picked from the uploaded logo.</p>
-            {uploadError && <p className="mt-2 text-sm font-medium text-red-700">{uploadError}</p>}
-            <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
-              <span className="h-4 w-4 rounded-sm border border-slate-200" style={{ backgroundColor: formData.themeColor }} />
-              Theme color {formData.themeColor}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700" htmlFor="library-logo">
+                Library logo
+              </label>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <label
+                  htmlFor="library-logo"
+                  className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  <ImageUp size={16} />
+                  Upload Logo
+                </label>
+                <input id="library-logo" type="file" accept="image/*" className="sr-only" onChange={handleLogoUpload} />
+                {formData.logoDataUrl && (
+                  <button
+                    type="button"
+                    onClick={handleRemoveLogo}
+                    className="inline-flex items-center justify-center gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100"
+                  >
+                    <Trash2 size={16} />
+                    Remove
+                  </button>
+                )}
+              </div>
+              <p className="mt-1 text-xs text-slate-500">The sidebar theme color is picked from the uploaded logo.</p>
+              {uploadError && <p className="mt-2 text-sm font-medium text-red-700">{uploadError}</p>}
+              <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+                <span className="h-4 w-4 rounded-sm border border-slate-200" style={{ backgroundColor: formData.themeColor }} />
+                Theme color {formData.themeColor}
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <button
-            type="submit"
-            className="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold shadow-sm"
-            style={{ backgroundColor: formData.themeColor, color: getReadableTextColor(formData.themeColor) }}
-          >
-            <Save size={16} />
-            Save Settings
-          </button>
-          {notice && <span className="text-sm font-medium text-emerald-700">{notice}</span>}
-        </div>
-      </form>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <button
+              type="submit"
+              disabled={isSavingSettings || isLoadingSettings}
+              className="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+              style={{ backgroundColor: formData?.themeColor || "#2563eb", color: getReadableTextColor(formData?.themeColor || "#2563eb") }}
+            >
+              <Save size={16} />
+              {isSavingSettings ? "Saving..." : "Save Settings"}
+            </button>
+            {notice && (
+              <span className={`text-sm font-medium ${notice.includes("✓") ? "text-emerald-700" : "text-red-700"}`}>{notice}</span>
+            )}
+          </div>
+        </form>
+      ) : null}
 
       <form onSubmit={handleSaveAdminProfile} className="border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-800">
-          <ShieldCheck size={18} style={{ color: formData.themeColor }} />
+          <ShieldCheck size={18} style={{ color: formData?.themeColor || "#2563eb" }} />
           Current User
         </div>
 
@@ -347,13 +392,18 @@ export const Settings = () => {
             type="submit"
             disabled={isSavingProfile}
             className="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
-            style={{ backgroundColor: formData.themeColor, color: getReadableTextColor(formData.themeColor) }}
+            style={{
+              backgroundColor: formData?.themeColor || "#2563eb",
+              color: getReadableTextColor(formData?.themeColor || "#2563eb"),
+            }}
           >
             <Save size={16} />
             {isSavingProfile ? "Saving..." : "Save User"}
           </button>
           {profileNotice.text && (
-            <span className={`text-sm font-medium ${profileNotice.tone === "error" ? "text-red-700" : profileNotice.tone === "warning" ? "text-amber-700" : "text-emerald-700"}`}>
+            <span
+              className={`text-sm font-medium ${profileNotice.tone === "error" ? "text-red-700" : profileNotice.tone === "warning" ? "text-amber-700" : "text-emerald-700"}`}
+            >
               {profileNotice.text}
             </span>
           )}
@@ -362,12 +412,10 @@ export const Settings = () => {
 
       <section className="border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-800">
-          <Users size={18} style={{ color: formData.themeColor }} />
+          <Users size={18} style={{ color: formData?.themeColor || "#2563eb" }} />
           Managers and Admins
         </div>
-        {currentUserProfile?.role !== "admin" && (
-          <p className="mb-3 text-sm text-amber-700">Only admins can add users or change roles.</p>
-        )}
+        {currentUserProfile?.role !== "admin" && <p className="mb-3 text-sm text-amber-700">Only admins can add users or change roles.</p>}
 
         <form onSubmit={handleAddTeamMember} className="grid gap-3 lg:grid-cols-[1fr_1fr_150px_1fr_auto]">
           <input
@@ -418,7 +466,9 @@ export const Settings = () => {
         </form>
 
         {teamNotice.text && (
-          <p className={`mt-3 text-sm font-medium ${teamNotice.tone === "error" ? "text-red-700" : teamNotice.tone === "warning" ? "text-amber-700" : "text-emerald-700"}`}>
+          <p
+            className={`mt-3 text-sm font-medium ${teamNotice.tone === "error" ? "text-red-700" : teamNotice.tone === "warning" ? "text-amber-700" : "text-emerald-700"}`}
+          >
             {teamNotice.text}
           </p>
         )}
@@ -430,7 +480,10 @@ export const Settings = () => {
             <div className="p-3 text-sm text-slate-500">No managers or admins found.</div>
           ) : (
             teamProfiles.map((member) => (
-              <div key={`${member.email}-${member.id}`} className="flex flex-col gap-2 p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <div
+                key={`${member.email}-${member.id}`}
+                className="flex flex-col gap-2 p-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+              >
                 <div>
                   <div className="font-semibold text-slate-900">{member.fullName}</div>
                   <div className="text-slate-500">{member.email}</div>

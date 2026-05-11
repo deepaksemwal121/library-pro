@@ -6,9 +6,12 @@ import { roleLabel, useCurrentUserProfile } from "../../features/settings/userPr
 
 const Sidebar = () => {
   const navigate = useNavigate();
-  const { libraryName, logoDataUrl, themeColor } = useLibrarySettings();
+  const { settings, isLoading } = useLibrarySettings();
+  const { libraryName, logoDataUrl, themeColor } = settings || {};
   const { profile } = useCurrentUserProfile();
-  const themeTextColor = getReadableTextColor(themeColor);
+  const themeTextColor = getReadableTextColor(themeColor || "#2563eb");
+  const displayName = libraryName || "Library Pro";
+  const displayThemeColor = themeColor || "#2563eb";
   const menuItems = [
     { path: "/dashboard", name: "Dashboard", icon: <LayoutDashboard size={20} /> },
     { path: "/members", name: "Members", icon: <Users size={20} /> },
@@ -28,12 +31,12 @@ const Sidebar = () => {
       <div className="mb-3 flex shrink-0 items-center gap-2 px-2 md:mb-8">
         <span
           className="inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md"
-          style={{ backgroundColor: themeColor, color: themeTextColor }}
+          style={{ backgroundColor: displayThemeColor, color: themeTextColor }}
         >
           {logoDataUrl ? <img src={logoDataUrl} alt="" className="h-full w-full object-cover" /> : <BookOpenCheck size={20} />}
         </span>
-        <h1 className="min-w-0 truncate text-lg font-bold leading-tight md:text-xl" title={libraryName}>
-          {libraryName}
+        <h1 className="min-w-0 truncate text-lg font-bold leading-tight md:text-xl" title={displayName}>
+          {displayName}
         </h1>
       </div>
 
@@ -47,7 +50,7 @@ const Sidebar = () => {
                 isActive ? "" : "hover:bg-slate-800 text-slate-400"
               }`
             }
-            style={({ isActive }) => (isActive ? { backgroundColor: themeColor, color: themeTextColor } : undefined)}
+            style={({ isActive }) => (isActive ? { backgroundColor: displayThemeColor, color: themeTextColor } : undefined)}
           >
             {item.icon}
             {item.name}

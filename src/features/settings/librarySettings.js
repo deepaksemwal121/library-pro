@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
+import supabase from "../../../helpers/supabase";
 
-const STORAGE_KEY = "librarypro-library-settings";
 const SETTINGS_EVENT = "librarypro-library-settings-updated";
 const DEFAULT_SETTINGS = {
   libraryName: "Library Pro",
@@ -38,8 +38,7 @@ export const applyLibraryTheme = (settings) => {
 
 export const loadLibrarySettings = () => {
   try {
-    const savedSettings = localStorage.getItem(STORAGE_KEY);
-    const settings = normalizeSettings(savedSettings ? JSON.parse(savedSettings) : DEFAULT_SETTINGS);
+    const settings = normalizeSettings(DEFAULT_SETTINGS);
     applyLibraryTheme(settings);
     return settings;
   } catch {
@@ -48,40 +47,109 @@ export const loadLibrarySettings = () => {
   }
 };
 
-export const saveLibrarySettings = (settings) => {
-  const normalizedSettings = normalizeSettings(settings);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedSettings));
-  applyLibraryTheme(normalizedSettings);
-  window.dispatchEvent(new CustomEvent(SETTINGS_EVENT, { detail: normalizedSettings }));
-  return normalizedSettings;
+export const fetchLibrarySettings = async () => {
+  try {
+    const { data, error } = await supabase.from("library_settings").select("library_name, theme_color, logo_data_url").limit(1).single();
+
+    if (error) {
+      console.error("Error fetching library settings:", error);
+      return DEFAULT_SETTINGS;
+    }
+
+    const settings = normalizeSettings({
+      libraryName: data?.library_name || DEFAULT_SETTINGS.libraryName,
+      themeColor: data?.theme_color || DEFAULT_SETTINGS.themeColor,
+      logoDataUrl: data?.logo_data_url || "",
+    });
+
+    applyLibraryTheme(settings);
+    return settings;
+  } catch (error) {
+    console.error("Error in fetchLibrarySettings:", error);
+    return DEFAULT_SETTINGS;
+  }
+};
+
+export const saveLibrarySettings = async (settings) => {
+  try {
+    const normalizedSettings = normalizeSettings(settings);
+
+    const { data: existingSettings } = await supabase.from("library_settings").select("id").limit(1).single();
+
+    const { data, error } = await supabase
+      .from("library_settings")
+      .update({
+        library_name: normalizedSettings.libraryName,
+        theme_color: normalizedSettings.themeColor,
+        logo_data_url: normalizedSettings.logoDataUrl,
+      })
+      .eq("id", existingSettings.id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error saving library settings:", error);
+      throw error;
+    }
+
+    const savedSettings = normalizeSettings({
+      libraryName: data?.library_name || normalizedSettings.libraryName,
+      themeColor: data?.theme_color || normalizedSettings.themeColor,
+      logoDataUrl: data?.logo_data_url || normalizedSettings.logoDataUrl,
+    });
+
+    applyLibraryTheme(savedSettings);
+    window.dispatchEvent(new CustomEvent(SETTINGS_EVENT, { detail: savedSettings }));
+    return savedSettings;
+  } catch (error) {
+    console.error("Error in saveLibrarySettings:", error);
+    throw error;
+  }
 };
 
 export const useLibrarySettings = () => {
-  const [settings, setSettings] = useState(loadLibrarySettings);
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    const loadSettings = async () => {
+      setIsLoading(true);
+      const loadedSettings = await fetchLibrarySettings();
+      setSettings(loadedSettings);
+      setIsLoading(false);
+    };
+
+    loadSettings();
+
     const handleSettingsChange = (event) => {
-      const updatedSettings = event.detail || loadLibrarySettings();
+      const updatedSettings = event.detail || DEFAULT_SETTINGS;
       applyLibraryTheme(updatedSettings);
       setSettings(updatedSettings);
     };
 
-    const handleStorageChange = (event) => {
-      if (event.key === STORAGE_KEY) {
-        const updatedSettings = loadLibrarySettings();
-        applyLibraryTheme(updatedSettings);
-        setSettings(updatedSettings);
-      }
-    };
+    const subscription = supabase
+      .channel("library_settings_changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "library_settings",
+        },
+        async () => {
+          const updatedSettings = await fetchLibrarySettings();
+          setSettings(updatedSettings);
+        },
+      )
+      .subscribe();
 
     window.addEventListener(SETTINGS_EVENT, handleSettingsChange);
-    window.addEventListener("storage", handleStorageChange);
 
     return () => {
       window.removeEventListener(SETTINGS_EVENT, handleSettingsChange);
-      window.removeEventListener("storage", handleStorageChange);
+      subscription.unsubscribe();
     };
   }, []);
 
-  return settings;
+  return { settings, isLoading };
 };

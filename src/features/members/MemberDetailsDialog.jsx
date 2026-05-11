@@ -439,7 +439,9 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
                       className="w-full rounded-md border border-slate-200 bg-white p-2 text-sm"
                     />
                     <p className={`mt-1 text-xs ${formData.idDocumentPath ? "text-slate-500" : "font-semibold text-red-700"}`}>
-                      {formData.idDocumentPath ? "Upload a new image or tap to use camera." : "Missing for this member. Please upload it or tap to use camera."}
+                      {formData.idDocumentPath
+                        ? "Upload a new image or tap to use camera."
+                        : "Missing for this member. Please upload it or tap to use camera."}
                     </p>
                   </div>
                   <div>
@@ -451,7 +453,9 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
                       onChange={(event) => setPassportPhotoFile(event.target.files?.[0] ?? null)}
                       className="w-full rounded-md border border-slate-200 bg-white p-2 text-sm"
                     />
-                    <p className="mt-1 text-xs text-slate-500">Optional. Tap to use selfie camera on mobile/tablet. The table will use a fallback photo if empty.</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Optional. Tap to use selfie camera on mobile/tablet. The table will use a fallback photo if empty.
+                    </p>
                   </div>
                 </div>
 

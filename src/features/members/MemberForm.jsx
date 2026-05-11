@@ -184,7 +184,9 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
         payment_for_month: formData.registrationDate,
         payment_method: formData.paymentMethod,
         payment_type: "Monthly Fee",
-        transaction_notes: formData.transactionNotes ? `Registration monthly fee: ${formData.transactionNotes}` : "Registration monthly fee",
+        transaction_notes: formData.transactionNotes
+          ? `Registration monthly fee: ${formData.transactionNotes}`
+          : "Registration monthly fee",
       },
     ];
 
@@ -227,12 +229,12 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
         {/* Full Name */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-            <input
-              type="text"
-              name="fullName"
-              value={formData.fullName}
-              onChange={handleChange}
-              required
+          <input
+            type="text"
+            name="fullName"
+            value={formData.fullName}
+            onChange={handleChange}
+            required
             className="w-full border rounded-md p-2 outline-blue-500"
             placeholder="Enter full name"
           />
@@ -420,7 +422,9 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
               onChange={(event) => setPassportPhotoFile(event.target.files?.[0] ?? null)}
               className="w-full rounded-md border border-slate-200 bg-white p-2 text-sm"
             />
-            <p className="mt-1 text-xs text-slate-500">Optional. A fallback photo will be shown if this is not uploaded. Tap to use selfie camera on mobile/tablet.</p>
+            <p className="mt-1 text-xs text-slate-500">
+              Optional. A fallback photo will be shown if this is not uploaded. Tap to use selfie camera on mobile/tablet.
+            </p>
           </div>
         </div>
 

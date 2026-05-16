@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { ArrowLeft, FileImage, Pencil, X } from "lucide-react";
+import { ArrowLeft, Camera, FileImage, FolderOpen, Pencil, X } from "lucide-react";
 import { SeatSelector } from "../seatmanagement/SeatSelector";
 import { getMemberFileSignedUrl } from "./memberFiles";
 import { EXIT_REASON_OPTIONS } from "./memberUtils";
@@ -460,17 +460,42 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
                 <div className="grid grid-cols-1 gap-4 border-t pt-4 sm:grid-cols-2">
                   <div>
                     <label className="mb-1 block text-sm font-bold text-slate-700">ID Document Photo</label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      onChange={(event) => setIdDocumentFile(event.target.files?.[0] ?? null)}
-                      className="w-full rounded-md border border-slate-200 bg-white p-2 text-sm"
-                    />
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <label
+                        htmlFor={`edit-id-document-camera-${member.id}`}
+                        className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                      >
+                        <Camera size={16} />
+                        Take Photo
+                      </label>
+                      <input
+                        id={`edit-id-document-camera-${member.id}`}
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={(event) => setIdDocumentFile(event.target.files?.[0] ?? null)}
+                        className="sr-only"
+                      />
+                      <label
+                        htmlFor={`edit-id-document-file-${member.id}`}
+                        className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                      >
+                        <FolderOpen size={16} />
+                        Choose File
+                      </label>
+                      <input
+                        id={`edit-id-document-file-${member.id}`}
+                        type="file"
+                        accept="image/*"
+                        onChange={(event) => setIdDocumentFile(event.target.files?.[0] ?? null)}
+                        className="sr-only"
+                      />
+                    </div>
+                    {idDocumentFile && <p className="mt-1 truncate text-xs font-medium text-slate-600">Selected: {idDocumentFile.name}</p>}
                     <p className={`mt-1 text-xs ${formData.idDocumentPath ? "text-slate-500" : "font-semibold text-red-700"}`}>
                       {formData.idDocumentPath
-                        ? "Upload a new image or tap to use camera."
-                        : "Missing for this member. Please upload it or tap to use camera."}
+                        ? "Upload a new image from camera or file storage."
+                        : "Missing for this member. Please upload it from camera or file storage."}
                     </p>
                   </div>
                   <div>

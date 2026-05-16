@@ -1,7 +1,9 @@
 import React, { useMemo, useState } from "react";
+import { Camera, FolderOpen, LoaderCircle } from "lucide-react";
 import supabase from "../../../helpers/supabase";
 import { SeatManagement } from "../seatmanagement/SeatManagement";
 import { getSeatBaseFeeFromSettings } from "../seatmanagement/seatSettings";
+import { useToast } from "../../components/ui/toastContext";
 import { uploadMemberFile } from "./memberFiles";
 import { getEndOfMonth } from "./memberUtils";
 
@@ -43,12 +45,11 @@ const initialFormData = {
 };
 
 export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberCreated = () => {} }) => {
+  const toast = useToast();
   const [formData, setFormData] = useState({
     ...initialFormData,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState("");
-  const [submitSuccess, setSubmitSuccess] = useState("");
   const [formVersion, setFormVersion] = useState(0);
   const [idDocumentFile, setIdDocumentFile] = useState(null);
   const [passportPhotoFile, setPassportPhotoFile] = useState(null);
@@ -106,20 +107,19 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setSubmitError("");
-    setSubmitSuccess("");
 
     if (!formData.seatNumber) {
-      setSubmitError("Please select a seat before submitting.");
+      toast.warning("Select a seat", { message: "Please select a seat before submitting." });
       return;
     }
 
     if (!idDocumentFile) {
-      setSubmitError("Please upload the member's ID document photo before submitting.");
+      toast.warning("ID document required", { message: "Please upload the member's ID document photo before submitting." });
       return;
     }
 
     setIsSubmitting(true);
+    toast.info("Registering member", { message: "Uploading documents and saving the member record.", duration: 2500 });
 
     const memberId = crypto.randomUUID();
     let idDocumentPath = "";
@@ -130,7 +130,7 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
       passportPhotoPath = await uploadMemberFile(memberId, passportPhotoFile, "passport-photo");
     } catch (error) {
       setIsSubmitting(false);
-      setSubmitError(`Could not upload member photo document: ${error.message}`);
+      toast.error("Could not upload member document", { message: error.message });
       return;
     }
 
@@ -162,16 +162,16 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
     if (error) {
       setIsSubmitting(false);
       if (error.code === "23505") {
-        setSubmitError("This seat is already occupied. Please select another seat.");
+        toast.error("Seat already occupied", { message: "This seat is already occupied. Please select another seat." });
         return;
       }
-      setSubmitError(error.message);
+      toast.error("Could not register member", { message: error.message });
       return;
     }
 
     if (formData.isFreeTier) {
       setIsSubmitting(false);
-      setSubmitSuccess("Free tier member registered successfully. No payment was recorded.");
+      toast.success("Free tier member registered", { message: "No payment was recorded for this member." });
       setFormData({ ...initialFormData });
       setIdDocumentFile(null);
       setPassportPhotoFile(null);
@@ -186,7 +186,7 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
 
     if (monthlyFeeAmount < 0) {
       setIsSubmitting(false);
-      setSubmitError("Fee amount cannot be less than the locker fee.");
+      toast.error("Invalid fee amount", { message: "Fee amount cannot be less than the locker fee." });
       return;
     }
 
@@ -219,14 +219,14 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
     setIsSubmitting(false);
 
     if (paymentError) {
-      setSubmitError(`Member created but failed to record payment: ${paymentError.message}`);
+      toast.warning("Member created, payment not recorded", { message: paymentError.message, duration: 7500 });
       setFormData({ ...initialFormData });
       setFormVersion((version) => version + 1);
       onMemberCreated();
       return;
     }
 
-    setSubmitSuccess("Member registered successfully and payment records created.");
+    toast.success("Member registered", { message: "Payment records were created successfully." });
     setFormData({ ...initialFormData });
     setIdDocumentFile(null);
     setPassportPhotoFile(null);
@@ -237,8 +237,6 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
   return (
     <div className="mx-auto max-w-3xl bg-white p-0 sm:p-2">
       <form className="space-y-4" onSubmit={handleSubmit}>
-        {submitError && <div className="border border-red-200 bg-red-50 p-3 text-sm text-red-700">{submitError}</div>}
-        {submitSuccess && <div className="border border-green-200 bg-green-50 p-3 text-sm text-green-700">{submitSuccess}</div>}
         {/* Full Name */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
@@ -431,16 +429,41 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
         <div className="pt-4 border-t mt-4 space-y-4">
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-1">ID Document Photo</label>
-            <input
-              key={`id-document-${formVersion}`}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={(event) => setIdDocumentFile(event.target.files?.[0] ?? null)}
-              required
-              className="w-full rounded-md border border-red-200 bg-red-50 p-2 text-sm"
-            />
-            <p className="mt-1 text-xs text-red-700">Required for every new member registration. Tap to use camera on mobile/tablet.</p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <label
+                htmlFor={`id-document-camera-${formVersion}`}
+                className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100"
+              >
+                <Camera size={16} />
+                Take Photo
+              </label>
+              <input
+                key={`id-document-camera-${formVersion}`}
+                id={`id-document-camera-${formVersion}`}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={(event) => setIdDocumentFile(event.target.files?.[0] ?? null)}
+                className="sr-only"
+              />
+              <label
+                htmlFor={`id-document-file-${formVersion}`}
+                className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                <FolderOpen size={16} />
+                Choose File
+              </label>
+              <input
+                key={`id-document-file-${formVersion}`}
+                id={`id-document-file-${formVersion}`}
+                type="file"
+                accept="image/*"
+                onChange={(event) => setIdDocumentFile(event.target.files?.[0] ?? null)}
+                className="sr-only"
+              />
+            </div>
+            {idDocumentFile && <p className="mt-1 truncate text-xs font-medium text-slate-600">Selected: {idDocumentFile.name}</p>}
+            <p className="mt-1 text-xs text-red-700">Required for every new member registration. Use camera or choose an existing image.</p>
           </div>
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-1">Passport Size Photo</label>
@@ -461,9 +484,11 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
         <button
           type="submit"
           disabled={isSubmitting}
-          className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-md mt-6 transition duration-200"
+          aria-busy={isSubmitting}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-green-600 py-3 font-bold text-white transition duration-200 hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-green-400"
         >
-          {isSubmitting ? "Registering..." : "Submit Registration"}
+          {isSubmitting && <LoaderCircle size={18} className="animate-spin" />}
+          {isSubmitting ? "Registering member..." : "Submit Registration"}
         </button>
       </form>
     </div>

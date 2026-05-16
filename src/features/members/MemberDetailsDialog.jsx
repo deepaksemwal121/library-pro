@@ -13,6 +13,7 @@ const getEditableMemberData = (member) => ({
   idType: member.idType,
   idNumber: member.idNumber,
   registrationDate: member.registrationDate,
+  isFreeTier: member.isFreeTier,
   lockerTaken: member.isLockerTaken,
   seatNumber: member.seatNumber,
   seatFloor: member.seatFloor,
@@ -76,10 +77,21 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setNotice({ tone: "", message: "" });
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? checked : value,
-    }));
+    setFormData((prev) => {
+      const next = {
+        ...prev,
+        [name]: type === "checkbox" ? checked : value,
+      };
+
+      if (name === "isFreeTier" && checked) {
+        return {
+          ...next,
+          feeAmount: 0,
+        };
+      }
+
+      return next;
+    });
   };
 
   const handleLeftChange = (e) => {
@@ -139,7 +151,7 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
       return;
     }
 
-    if (Number(formData.feeAmount) < 0) {
+    if (!formData.isFreeTier && Number(formData.feeAmount) < 0) {
       setNotice({ tone: "error", message: "Fee amount cannot be negative." });
       return;
     }
@@ -242,10 +254,11 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
                   ["ID Type", member.idType],
                   ["ID Number", member.idNumber],
                   ["Seat", `${member.seatNumber} (${member.seatFloor} floor)`],
+                  ["Membership Tier", member.isFreeTier ? "Free tier" : "Paid member"],
                   ["Locker Taken", member.isLockerTaken ? "Yes" : "No"],
-                  ["Fee Amount", member.feeAmount ? `Rs.${member.feeAmount}` : "Not added"],
-                  ["Payment Method", member.paymentMethod || "Not added"],
-                  ["Paid Until", member.paidUntil || "Not added"],
+                  ["Fee Amount", member.isFreeTier ? "Rs.0 (free tier)" : member.feeAmount ? `Rs.${member.feeAmount}` : "Not added"],
+                  ["Payment Method", member.isFreeTier ? "Not applicable" : member.paymentMethod || "Not added"],
+                  ["Paid Until", member.isFreeTier ? "Free tier" : member.paidUntil || "Not added"],
                   ["ID Document", member.idDocumentPath ? "Uploaded" : "Not uploaded"],
                   ["Transaction Notes", member.transactionNotes || "Not added"],
                 ].map(([label, value]) => (
@@ -386,12 +399,28 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
                       name="paymentMethod"
                       value={formData.paymentMethod}
                       onChange={handleChange}
-                      className="w-full rounded-md border bg-white p-2"
+                      disabled={formData.isFreeTier}
+                      className="w-full rounded-md border bg-white p-2 disabled:cursor-not-allowed disabled:opacity-70"
                     >
                       <option>Cash</option>
                       <option>Online</option>
                     </select>
                   </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">Fee Amount (Rs.)</label>
+                    <input
+                      type="number"
+                      name="feeAmount"
+                      value={formData.feeAmount}
+                      onChange={handleChange}
+                      disabled={formData.isFreeTier}
+                      className="w-full rounded-md border p-2 outline-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
+                    />
+                  </div>
+                  <label className="flex items-center gap-2 pt-7 text-sm text-emerald-800">
+                    <input type="checkbox" name="isFreeTier" checked={formData.isFreeTier} onChange={handleChange} className="h-4 w-4" />
+                    Free tier member
+                  </label>
                   <label className="flex items-center gap-2 pt-7 text-sm text-slate-700">
                     <input type="checkbox" name="lockerTaken" checked={formData.lockerTaken} onChange={handleChange} className="h-4 w-4" />
                     Locker Taken

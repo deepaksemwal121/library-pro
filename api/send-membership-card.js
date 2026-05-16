@@ -47,10 +47,11 @@ const buildMembershipCardHtml = ({ member, payments, photoUrl }) => {
             <table style="width:100%;margin-top:18px;border-collapse:collapse;font-size:14px;">
               <tr><td style="padding:7px 0;color:#64748b;">Phone</td><td style="padding:7px 0;font-weight:700;">${escapeHtml(member.phoneNumber)}</td></tr>
               <tr><td style="padding:7px 0;color:#64748b;">Email</td><td style="padding:7px 0;font-weight:700;">${escapeHtml(member.registeredEmail)}</td></tr>
+              <tr><td style="padding:7px 0;color:#64748b;">Tier</td><td style="padding:7px 0;font-weight:700;">${member.isFreeTier ? "Free tier" : "Paid member"}</td></tr>
               <tr><td style="padding:7px 0;color:#64748b;">Seat</td><td style="padding:7px 0;font-weight:700;">${escapeHtml(member.seatNumber)} (${escapeHtml(member.seatFloor)} floor)</td></tr>
               <tr><td style="padding:7px 0;color:#64748b;">Locker</td><td style="padding:7px 0;font-weight:700;">${member.isLockerTaken ? "Taken" : "Not taken"}</td></tr>
               <tr><td style="padding:7px 0;color:#64748b;">Registration</td><td style="padding:7px 0;font-weight:700;">${formatDate(member.registrationDate)}</td></tr>
-              <tr><td style="padding:7px 0;color:#64748b;">Paid Until</td><td style="padding:7px 0;font-weight:700;">${formatDate(member.paidUntil)}</td></tr>
+              <tr><td style="padding:7px 0;color:#64748b;">Paid Until</td><td style="padding:7px 0;font-weight:700;">${member.isFreeTier ? "Free tier" : formatDate(member.paidUntil)}</td></tr>
             </table>
           </div>
         </div>

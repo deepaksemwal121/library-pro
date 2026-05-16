@@ -3,7 +3,14 @@ export const getEndOfMonth = (dateValue) => {
   return new Date(date.getFullYear(), date.getMonth() + 1, 0).toISOString().slice(0, 10);
 };
 
-export const getPaymentStatus = (paidUntilValue) => {
+export const getPaymentStatus = (paidUntilValue, member = null) => {
+  if (member?.isFreeTier) {
+    return {
+      label: "Free tier",
+      tone: "free",
+    };
+  }
+
   if (!paidUntilValue) {
     return {
       label: "Due date passed",
@@ -86,6 +93,7 @@ export const mapMemberFromDb = (member) => ({
   paymentMethod: member.payment_method,
   transactionNotes: member.transaction_notes,
   paidUntil: member.paid_until,
+  isFreeTier: Boolean(member.is_free_tier),
   idDocumentPath: member.id_document_path,
   passportPhotoPath: member.passport_photo_path,
   memberStatus: member.member_status,

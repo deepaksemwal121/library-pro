@@ -6,6 +6,7 @@ import { createFloorId, getSeatRange, loadSeatFloors, saveSeatFloors } from "./s
 
 const statusClasses = {
   green: "text-emerald-700 bg-emerald-50 border-emerald-200",
+  free: "text-sky-700 bg-sky-50 border-sky-200",
   yellow: "text-yellow-800 bg-yellow-50 border-yellow-200",
   red: "text-red-700 bg-red-50 border-red-200",
 };
@@ -413,10 +414,10 @@ export const SeatManagement = ({ onSeatSelect = () => {}, isLockerChecked = fals
                 <span className="text-slate-500">Registered:</span> {hoveredMember.registrationDate}
               </div>
               <div>
-                <span className="text-slate-500">Paid until:</span> {hoveredMember.paidUntil}
+                <span className="text-slate-500">Paid until:</span> {hoveredMember.isFreeTier ? "Free tier" : hoveredMember.paidUntil}
               </div>
-              <span className={`inline-block border px-2 py-0.5 font-semibold ${statusClasses[getPaymentStatus(hoveredMember.paidUntil).tone]}`}>
-                {getPaymentStatus(hoveredMember.paidUntil).label}
+              <span className={`inline-block border px-2 py-0.5 font-semibold ${statusClasses[getPaymentStatus(hoveredMember.paidUntil, hoveredMember).tone]}`}>
+                {getPaymentStatus(hoveredMember.paidUntil, hoveredMember).label}
               </span>
             </div>
           )}

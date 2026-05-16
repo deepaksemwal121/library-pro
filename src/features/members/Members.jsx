@@ -103,10 +103,11 @@ export const Members = () => {
         id_type: formData.idType,
         id_number: formData.idNumber,
         registration_date: formData.registrationDate,
+        is_free_tier: formData.isFreeTier,
         locker_taken: formData.lockerTaken,
         seat_number: formData.seatNumber,
         seat_floor: formData.seatFloor,
-        fee_amount: Number(formData.feeAmount),
+        fee_amount: formData.isFreeTier ? 0 : Number(formData.feeAmount),
         payment_method: formData.paymentMethod,
         transaction_notes: formData.transactionNotes || null,
         paid_until: formData.paidUntil,
@@ -176,7 +177,7 @@ export const Members = () => {
     // Apply payment status filter
     if (paymentStatusFilter) {
       result = result.filter((member) => {
-        const status = getPaymentStatus(member.paidUntil);
+        const status = getPaymentStatus(member.paidUntil, member);
         return status.tone === paymentStatusFilter;
       });
     }
@@ -206,9 +207,10 @@ export const Members = () => {
             className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:border-slate-400"
           >
             <option value="all">All Members ({members.length})</option>
-            <option value="green">✓ Paid ({members.filter((m) => getPaymentStatus(m.paidUntil).tone === "green").length})</option>
-            <option value="yellow">⚠ Payment Due ({members.filter((m) => getPaymentStatus(m.paidUntil).tone === "yellow").length})</option>
-            <option value="red">✗ Due Date Passed ({members.filter((m) => getPaymentStatus(m.paidUntil).tone === "red").length})</option>
+            <option value="free">Free Tier ({members.filter((m) => getPaymentStatus(m.paidUntil, m).tone === "free").length})</option>
+            <option value="green">Paid ({members.filter((m) => getPaymentStatus(m.paidUntil, m).tone === "green").length})</option>
+            <option value="yellow">Payment Due ({members.filter((m) => getPaymentStatus(m.paidUntil, m).tone === "yellow").length})</option>
+            <option value="red">Due Date Passed ({members.filter((m) => getPaymentStatus(m.paidUntil, m).tone === "red").length})</option>
           </select>
         </div>
         <button

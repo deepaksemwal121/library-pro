@@ -100,6 +100,11 @@ export const PaymentHistoryDialog = ({
     e.preventDefault();
     setNotice({ tone: "", message: "" });
 
+    if (member?.isFreeTier) {
+      setNotice({ tone: "error", message: "Free tier members do not need payment records." });
+      return;
+    }
+
     if (!formData.amount || !formData.paymentForMonth) {
       setNotice({ tone: "error", message: "Please fill in all required fields." });
       return;
@@ -255,7 +260,7 @@ export const PaymentHistoryDialog = ({
               </Dialog.Description>
               <div className="mt-2 text-xs text-slate-700">
                 <span className="font-semibold">Paid Until: </span>
-                {member.paidUntil || member.paid_until || <span className="text-red-600">Not set</span>}
+                {member.isFreeTier ? "Free tier" : member.paidUntil || member.paid_until || <span className="text-red-600">Not set</span>}
               </div>
             </div>
             <Dialog.Close asChild>
@@ -296,11 +301,18 @@ export const PaymentHistoryDialog = ({
             <button
               type="button"
               onClick={() => setShowAddForm(true)}
-              className="mb-6 inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700"
+              disabled={member.isFreeTier}
+              className="mb-6 inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-sky-300"
             >
               <Plus size={18} />
-              Record Payment
+              {member.isFreeTier ? "Free Tier Member" : "Record Payment"}
             </button>
+          )}
+
+          {member.isFreeTier && (
+            <div className="mb-6 rounded-md border border-sky-100 bg-sky-50 p-3 text-sm font-medium text-sky-700">
+              This member is on the free tier, so no payment collection is required.
+            </div>
           )}
 
           {showAddForm && (

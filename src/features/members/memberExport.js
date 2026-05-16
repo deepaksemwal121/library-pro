@@ -15,10 +15,11 @@ export const exportMembersToExcel = (members) => {
     "Registration Date": member.registrationDate,
     "Seat Number": member.seatNumber,
     Floor: member.seatFloor,
+    "Membership Tier": member.isFreeTier ? "Free tier" : "Paid member",
     Locker: member.isLockerTaken ? "Yes" : "No",
-    "Fee Amount": member.feeAmount,
-    "Payment Method": member.paymentMethod,
-    "Paid Until": member.paidUntil,
+    "Fee Amount": member.isFreeTier ? 0 : member.feeAmount,
+    "Payment Method": member.isFreeTier ? "N/A" : member.paymentMethod,
+    "Paid Until": member.isFreeTier ? "Free tier" : member.paidUntil,
     "Date of Birth": member.dateOfBirth || "-",
     "Transaction Notes": member.transactionNotes || "-",
   }));
@@ -37,6 +38,7 @@ export const exportMembersToExcel = (members) => {
     { wch: 16 }, // Registration Date
     { wch: 12 }, // Seat Number
     { wch: 10 }, // Floor
+    { wch: 16 }, // Membership Tier
     { wch: 8 }, // Locker
     { wch: 12 }, // Fee Amount
     { wch: 14 }, // Payment Method

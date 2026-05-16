@@ -32,6 +32,7 @@ const initialFormData = {
   idType: "Aadhar",
   idNumber: "",
   registrationDate: "",
+  isFreeTier: false,
   lockerTaken: false,
   seatNumber: "",
   seatFloor: "",
@@ -59,8 +60,8 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
 
     const baseFee = Number(formData.seatBaseFee) || getSeatBaseFeeFromSettings(formData.seatNumber);
     const midMonthDiscount = isAfterMidMonth(formData.registrationDate);
-    const seatFee = midMonthDiscount ? baseFee / 2 : baseFee;
-    const lockerFee = formData.lockerTaken ? LOCKER_FEE : 0;
+    const seatFee = formData.isFreeTier ? 0 : midMonthDiscount ? baseFee / 2 : baseFee;
+    const lockerFee = formData.isFreeTier ? 0 : formData.lockerTaken ? LOCKER_FEE : 0;
 
     return {
       baseFee,
@@ -68,11 +69,11 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
       lockerFee,
       midMonthDiscount,
     };
-  }, [formData.lockerTaken, formData.registrationDate, formData.seatBaseFee, formData.seatNumber]);
+  }, [formData.isFreeTier, formData.lockerTaken, formData.registrationDate, formData.seatBaseFee, formData.seatNumber]);
 
   const withSuggestedFee = (data) => ({
     ...data,
-    feeAmount: calculateSuggestedFee(data.seatNumber, data.lockerTaken, data.registrationDate, data.seatBaseFee),
+    feeAmount: data.isFreeTier ? 0 : calculateSuggestedFee(data.seatNumber, data.lockerTaken, data.registrationDate, data.seatBaseFee),
   });
 
   const handleSeatPick = ({ seatNumber, floor, baseFee }) => {
@@ -95,7 +96,7 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
         [name]: type === "checkbox" ? checked : value,
       };
 
-      if (name === "lockerTaken" || name === "registrationDate") {
+      if (name === "isFreeTier" || name === "lockerTaken" || name === "registrationDate") {
         return withSuggestedFee(next);
       }
 
@@ -144,10 +145,11 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
         id_type: formData.idType,
         id_number: formData.idNumber,
         registration_date: formData.registrationDate,
+        is_free_tier: formData.isFreeTier,
         locker_taken: formData.lockerTaken,
         seat_number: formData.seatNumber,
         seat_floor: formData.seatFloor,
-        fee_amount: Number(formData.feeAmount),
+        fee_amount: formData.isFreeTier ? 0 : Number(formData.feeAmount),
         payment_method: formData.paymentMethod,
         transaction_notes: formData.transactionNotes || null,
         paid_until: getEndOfMonth(formData.registrationDate),
@@ -164,6 +166,17 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
         return;
       }
       setSubmitError(error.message);
+      return;
+    }
+
+    if (formData.isFreeTier) {
+      setIsSubmitting(false);
+      setSubmitSuccess("Free tier member registered successfully. No payment was recorded.");
+      setFormData({ ...initialFormData });
+      setIdDocumentFile(null);
+      setPassportPhotoFile(null);
+      setFormVersion((version) => version + 1);
+      onMemberCreated();
       return;
     }
 
@@ -329,6 +342,20 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
           </div>
         </div>
 
+        <label className="flex items-start gap-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+          <input
+            checked={formData.isFreeTier}
+            onChange={handleChange}
+            type="checkbox"
+            name="isFreeTier"
+            className="mt-0.5 h-4 w-4 rounded text-emerald-600"
+          />
+          <span>
+            <span className="block font-semibold">Free tier member</span>
+            <span className="text-emerald-700">No registration, monthly, or locker fee will be recorded for this member.</span>
+          </span>
+        </label>
+
         <div className="pt-4 border-t mt-4 space-y-3">
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-2">Select Seat</label>
@@ -353,6 +380,7 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
         <div className="pt-4 border-t mt-4 space-y-4">
           {feeBreakdown && (
             <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+              {formData.isFreeTier && <div className="font-semibold text-emerald-700">Free tier applied: total payable is Rs.0.</div>}
               <div>Seat fee: Rs.{feeBreakdown.seatFee}</div>
               {feeBreakdown.midMonthDiscount && <div>Mid-month joining applied: half seat fee charged after the 15th.</div>}
               <div>Locker fee: Rs.{feeBreakdown.lockerFee}</div>
@@ -368,7 +396,8 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
                 value={formData.feeAmount}
                 onChange={handleChange}
                 required
-                className="w-full border rounded-md p-2 border-green-200 bg-green-50 focus:ring-green-500"
+                disabled={formData.isFreeTier}
+                className="w-full border rounded-md p-2 border-green-200 bg-green-50 focus:ring-green-500 disabled:cursor-not-allowed disabled:opacity-70"
                 placeholder="0.00"
               />
             </div>
@@ -378,7 +407,8 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
                 name="paymentMethod"
                 value={formData.paymentMethod}
                 onChange={handleChange}
-                className="w-full border rounded-md p-2 bg-white"
+                disabled={formData.isFreeTier}
+                className="w-full border rounded-md p-2 bg-white disabled:cursor-not-allowed disabled:opacity-70"
               >
                 <option>Cash</option>
                 <option>Online</option>

@@ -109,8 +109,9 @@ const Dashboard = () => {
     const monthlyRevenue = activeMembers.reduce((total, member) => total + Number(member.feeAmount || 0), 0);
     const monthlyExpense = expenses.reduce((total, expense) => total + Number(expense.amount || 0), 0);
     const projectedProfit = monthlyRevenue - monthlyExpense;
-    const overdueMembers = activeMembers.filter((member) => getPaymentStatus(member.paidUntil).tone === "red");
-    const dueMembers = activeMembers.filter((member) => getPaymentStatus(member.paidUntil).tone === "yellow");
+    const freeTierMembers = activeMembers.filter((member) => member.isFreeTier);
+    const overdueMembers = activeMembers.filter((member) => getPaymentStatus(member.paidUntil, member).tone === "red");
+    const dueMembers = activeMembers.filter((member) => getPaymentStatus(member.paidUntil, member).tone === "yellow");
     const joinedThisMonth = members.filter((member) => isSameMonth(member.registrationDate, 0)).length;
 
     // Calculate seat occupancy growth rate (active members this month vs last month)
@@ -137,6 +138,7 @@ const Dashboard = () => {
       projectedProfit,
       overdueMembers,
       dueMembers,
+      freeTierMembers,
       joinedThisMonth,
       growthRate,
       churnRate,
@@ -276,7 +278,7 @@ const Dashboard = () => {
         <KpiCard
           title="Active Members"
           value={metrics.activeMembers.length}
-          helper={`${metrics.joinedThisMonth} joined this month`}
+          helper={`${metrics.joinedThisMonth} joined this month, ${metrics.freeTierMembers.length} free tier`}
           icon={<Users size={20} />}
           tone="emerald"
         />

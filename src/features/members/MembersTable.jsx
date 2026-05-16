@@ -7,6 +7,7 @@ import { getPaymentStatus } from "./memberUtils";
 
 const statusClasses = {
   green: "text-emerald-700 bg-emerald-50",
+  free: "text-sky-700 bg-sky-50",
   yellow: "text-amber-700 bg-amber-50",
   red: "text-red-700 bg-red-50",
 };
@@ -99,7 +100,7 @@ export const MembersTable = ({
 
               {!loading &&
                 visibleMembers.map((member, index) => {
-                  const paymentStatus = getPaymentStatus(member.paidUntil);
+                  const paymentStatus = getPaymentStatus(member.paidUntil, member);
 
                   return (
                     <tr key={member.id} className={`${index % 2 === 0 ? "bg-white" : "bg-slate-50/50"} transition-colors hover:bg-sky-50/70`}>
@@ -109,6 +110,11 @@ export const MembersTable = ({
                           <div className="min-w-0">
                             <div className="truncate font-semibold text-slate-900">{member.fullName}</div>
                             <div className="mt-0.5 text-xs text-slate-500">Seat {member.seatNumber}</div>
+                            {member.isFreeTier && (
+                              <div className="mt-1 inline-flex rounded-sm bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700">
+                                Free tier
+                              </div>
+                            )}
                             {!member.idDocumentPath && (
                               <div className="mt-1 inline-flex items-center gap-1 rounded-sm bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
                                 <AlertTriangle size={11} />
@@ -123,7 +129,7 @@ export const MembersTable = ({
                         {member.seatNumber} <span className="text-xs text-slate-400">({member.seatFloor} floor)</span>
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-600">{member.isLockerTaken ? "Yes" : "No"}</td>
-                      <td className="px-4 py-3 text-sm text-slate-600">{member.paidUntil}</td>
+                      <td className="px-4 py-3 text-sm text-slate-600">{member.isFreeTier ? "Free tier" : member.paidUntil}</td>
                       <td className="px-4 py-3 text-sm">
                         <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${statusClasses[paymentStatus.tone]}`}>
                           {paymentStatus.label}

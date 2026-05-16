@@ -130,7 +130,7 @@ export const Settings = () => {
     try {
       const savedSettings = await saveLibrarySettings(formData);
       setFormData(savedSettings);
-      setNotice("✓ Library settings saved and synced across devices.");
+      setNotice("Library settings saved and synced across devices.");
     } catch (error) {
       setNotice(`Error saving settings: ${error.message}`);
     } finally {
@@ -337,7 +337,7 @@ export const Settings = () => {
               {isSavingSettings ? "Saving..." : "Save Settings"}
             </button>
             {notice && (
-              <span className={`text-sm font-medium ${notice.includes("✓") ? "text-emerald-700" : "text-red-700"}`}>{notice}</span>
+              <span className={`text-sm font-medium ${notice.startsWith("Error") ? "text-red-700" : "text-emerald-700"}`}>{notice}</span>
             )}
           </div>
         </form>

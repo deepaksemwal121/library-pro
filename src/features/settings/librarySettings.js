@@ -10,6 +10,21 @@ const DEFAULT_SETTINGS = {
 
 const HEX_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
 
+const mapSettingsFromDb = (settings, fallback = DEFAULT_SETTINGS) =>
+  normalizeSettings({
+    libraryName: settings?.library_name || fallback.libraryName,
+    themeColor: settings?.theme_color || fallback.themeColor,
+    logoDataUrl: settings?.logo_data_url || fallback.logoDataUrl,
+  });
+
+const getSettingsErrorMessage = (error) => {
+  if (error?.code === "42501" || error?.message?.toLowerCase().includes("row-level security")) {
+    return "Only admins can change library name and logo settings.";
+  }
+
+  return error?.message || "Could not save library settings.";
+};
+
 const normalizeSettings = (settings) => ({
   ...DEFAULT_SETTINGS,
   ...(settings || {}),
@@ -49,19 +64,19 @@ export const loadLibrarySettings = () => {
 
 export const fetchLibrarySettings = async () => {
   try {
-    const { data, error } = await supabase.from("library_settings").select("library_name, theme_color, logo_data_url").limit(1).single();
+    const { data, error } = await supabase
+      .from("library_settings")
+      .select("library_name, theme_color, logo_data_url")
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
 
     if (error) {
       console.error("Error fetching library settings:", error);
       return DEFAULT_SETTINGS;
     }
 
-    const settings = normalizeSettings({
-      libraryName: data?.library_name || DEFAULT_SETTINGS.libraryName,
-      themeColor: data?.theme_color || DEFAULT_SETTINGS.themeColor,
-      logoDataUrl: data?.logo_data_url || "",
-    });
-
+    const settings = mapSettingsFromDb(data);
     applyLibraryTheme(settings);
     return settings;
   } catch (error) {
@@ -73,30 +88,40 @@ export const fetchLibrarySettings = async () => {
 export const saveLibrarySettings = async (settings) => {
   try {
     const normalizedSettings = normalizeSettings(settings);
+    const payload = {
+      library_name: normalizedSettings.libraryName,
+      theme_color: normalizedSettings.themeColor,
+      logo_data_url: normalizedSettings.logoDataUrl,
+    };
 
-    const { data: existingSettings } = await supabase.from("library_settings").select("id").limit(1).single();
-
-    const { data, error } = await supabase
+    const { data: existingSettings, error: fetchError } = await supabase
       .from("library_settings")
-      .update({
-        library_name: normalizedSettings.libraryName,
-        theme_color: normalizedSettings.themeColor,
-        logo_data_url: normalizedSettings.logoDataUrl,
-      })
-      .eq("id", existingSettings.id)
-      .select()
-      .single();
+      .select("id")
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (fetchError) {
+      console.error("Error checking library settings:", fetchError);
+      throw new Error(getSettingsErrorMessage(fetchError));
+    }
+
+    const query = existingSettings?.id
+      ? supabase.from("library_settings").update(payload).eq("id", existingSettings.id)
+      : supabase.from("library_settings").insert(payload);
+
+    const { data, error } = await query.select("library_name, theme_color, logo_data_url").maybeSingle();
 
     if (error) {
       console.error("Error saving library settings:", error);
-      throw error;
+      throw new Error(getSettingsErrorMessage(error));
     }
 
-    const savedSettings = normalizeSettings({
-      libraryName: data?.library_name || normalizedSettings.libraryName,
-      themeColor: data?.theme_color || normalizedSettings.themeColor,
-      logoDataUrl: data?.logo_data_url || normalizedSettings.logoDataUrl,
-    });
+    if (!data) {
+      throw new Error("Only admins can change library name and logo settings.");
+    }
+
+    const savedSettings = mapSettingsFromDb(data, normalizedSettings);
 
     applyLibraryTheme(savedSettings);
     window.dispatchEvent(new CustomEvent(SETTINGS_EVENT, { detail: savedSettings }));

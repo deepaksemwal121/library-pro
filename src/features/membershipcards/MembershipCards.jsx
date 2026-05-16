@@ -5,7 +5,22 @@ import { SearchBar } from "../../components/ui/SearchBar";
 import { getMemberFileSignedUrl } from "../members/memberFiles";
 import { mapMemberFromDb } from "../members/memberUtils";
 
-const loadActiveMembers = async () => {
+let activeMembersCache = null;
+let activeMembersLoadPromise = null;
+const cardDataCache = new Map();
+const cardDataLoadPromises = new Map();
+
+const getCardDataCacheKey = (member) => `${member.id}:${member.passportPhotoPath || ""}`;
+
+const clearCardDataForMember = (memberId) => {
+  for (const key of cardDataCache.keys()) {
+    if (key.startsWith(`${memberId}:`)) {
+      cardDataCache.delete(key);
+    }
+  }
+};
+
+const loadActiveMembersFromSupabase = async () => {
   const { data, error } = await supabase
     .from("library_members")
     .select("*")
@@ -15,6 +30,60 @@ const loadActiveMembers = async () => {
   if (error) throw error;
 
   return data.map(mapMemberFromDb);
+};
+
+const loadActiveMembers = async ({ force = false } = {}) => {
+  if (!force && activeMembersCache) return activeMembersCache;
+  if (!force && activeMembersLoadPromise) return activeMembersLoadPromise;
+
+  activeMembersLoadPromise = loadActiveMembersFromSupabase()
+    .then((members) => {
+      activeMembersCache = members;
+      return members;
+    })
+    .finally(() => {
+      activeMembersLoadPromise = null;
+    });
+
+  return activeMembersLoadPromise;
+};
+
+const loadMembershipCardData = async (member, { force = false } = {}) => {
+  const cacheKey = getCardDataCacheKey(member);
+
+  if (!force && cardDataCache.has(cacheKey)) {
+    return cardDataCache.get(cacheKey);
+  }
+
+  if (!force && cardDataLoadPromises.has(cacheKey)) {
+    return cardDataLoadPromises.get(cacheKey);
+  }
+
+  const loadPromise = Promise.all([
+    supabase
+      .from("payment_history")
+      .select("*")
+      .eq("member_id", member.id)
+      .order("payment_for_month", { ascending: false }),
+    getMemberFileSignedUrl(member.passportPhotoPath),
+  ])
+    .then(([paymentResponse, signedPhotoUrl]) => {
+      if (paymentResponse.error) throw paymentResponse.error;
+
+      const cardData = {
+        payments: paymentResponse.data || [],
+        photoUrl: signedPhotoUrl,
+      };
+
+      cardDataCache.set(cacheKey, cardData);
+      return cardData;
+    })
+    .finally(() => {
+      cardDataLoadPromises.delete(cacheKey);
+    });
+
+  cardDataLoadPromises.set(cacheKey, loadPromise);
+  return loadPromise;
 };
 
 const formatCurrency = (value) => `Rs.${Number(value || 0).toFixed(2)}`;
@@ -48,8 +117,40 @@ const readSendCardResponse = async (response) => {
   return { error: text || "Could not send membership card." };
 };
 
-const MembershipCardPreview = ({ member, payments, photoUrl }) => {
+const SkeletonBlock = ({ className = "" }) => <div className={`animate-pulse rounded bg-slate-200 ${className}`} />;
+
+const MemberListSkeleton = () => (
+  <div className="space-y-2 p-2">
+    {Array.from({ length: 7 }).map((_, index) => (
+      <div key={index} className="flex items-start gap-3 rounded-md px-3 py-2">
+        <SkeletonBlock className="h-9 w-9 shrink-0" />
+        <div className="min-w-0 flex-1 space-y-2">
+          <SkeletonBlock className="h-4 w-3/4" />
+          <SkeletonBlock className="h-3 w-full" />
+          <SkeletonBlock className="h-3 w-2/3" />
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
+const PaymentRecordsSkeleton = () => (
+  <div className="space-y-2 rounded-md border border-slate-200 p-3">
+    {Array.from({ length: 4 }).map((_, index) => (
+      <div key={index} className="grid grid-cols-[1fr_0.8fr_0.8fr_0.7fr] gap-3">
+        <SkeletonBlock className="h-4" />
+        <SkeletonBlock className="h-4" />
+        <SkeletonBlock className="h-4" />
+        <SkeletonBlock className="h-4" />
+      </div>
+    ))}
+  </div>
+);
+
+const MembershipCardPreview = ({ member, payments, photoUrl, isLoading }) => {
+  const [loadedImage, setLoadedImage] = useState({ src: "", loaded: false });
   const totalPaid = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  const isCurrentImageLoaded = loadedImage.src === photoUrl && loadedImage.loaded;
 
   if (!member) {
     return (
@@ -67,8 +168,18 @@ const MembershipCardPreview = ({ member, payments, photoUrl }) => {
       </div>
 
       <div className="grid gap-5 p-5 sm:grid-cols-[auto_minmax(0,1fr)]">
-        {photoUrl ? (
-          <img src={photoUrl} alt={member.fullName} className="h-32 w-28 rounded-md border border-slate-200 object-cover" />
+        {isLoading ? (
+          <SkeletonBlock className="h-32 w-28 border border-slate-200" />
+        ) : photoUrl ? (
+          <div className="relative h-32 w-28 overflow-hidden rounded-md border border-slate-200 bg-slate-50">
+            {!isCurrentImageLoaded && <SkeletonBlock className="absolute inset-0" />}
+            <img
+              src={photoUrl}
+              alt={member.fullName}
+              onLoad={() => setLoadedImage({ src: photoUrl, loaded: true })}
+              className={`h-full w-full object-cover transition-opacity duration-200 ${isCurrentImageLoaded ? "opacity-100" : "opacity-0"}`}
+            />
+          </div>
         ) : (
           <div className="flex h-32 w-28 items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-3xl font-bold text-slate-400">
             {member.fullName?.charAt(0)?.toUpperCase() || "M"}
@@ -115,7 +226,9 @@ const MembershipCardPreview = ({ member, payments, photoUrl }) => {
           <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">Total {formatCurrency(totalPaid)}</span>
         </div>
 
-        {payments.length === 0 ? (
+        {isLoading ? (
+          <PaymentRecordsSkeleton />
+        ) : payments.length === 0 ? (
           <div className="rounded-md border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">No payment records found.</div>
         ) : (
           <div className="overflow-hidden rounded-md border border-slate-200">
@@ -153,6 +266,7 @@ export const MembershipCards = () => {
   const [photoUrl, setPhotoUrl] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadingCardData, setLoadingCardData] = useState(false);
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState({ tone: "", message: "" });
 
@@ -172,15 +286,24 @@ export const MembershipCards = () => {
   useEffect(() => {
     let ignore = false;
 
-    const fetchMembers = async () => {
-      setLoading(true);
-      setNotice({ tone: "", message: "" });
+    const applyMembers = (loadedMembers) => {
+      setMembers(loadedMembers);
+      setSelectedMemberId((currentId) => (loadedMembers.some((member) => member.id === currentId) ? currentId : loadedMembers[0]?.id || ""));
+    };
+
+    const fetchMembers = async ({ force = false } = {}) => {
+      if (!activeMembersCache || force) {
+        setLoading(true);
+      }
+
+      if (force) {
+        setNotice({ tone: "", message: "" });
+      }
 
       try {
-        const loadedMembers = await loadActiveMembers();
+        const loadedMembers = await loadActiveMembers({ force });
         if (!ignore) {
-          setMembers(loadedMembers);
-          setSelectedMemberId((currentId) => currentId || loadedMembers[0]?.id || "");
+          applyMembers(loadedMembers);
         }
       } catch (error) {
         if (!ignore) {
@@ -193,10 +316,27 @@ export const MembershipCards = () => {
       }
     };
 
+    if (activeMembersCache) {
+      applyMembers(activeMembersCache);
+      setLoading(false);
+    }
+
     fetchMembers();
+
+    const membersChannel = supabase
+      .channel("membership_cards_members_changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "library_members" }, (payload) => {
+        const changedMemberId = payload.new?.id || payload.old?.id;
+        if (changedMemberId) {
+          clearCardDataForMember(changedMemberId);
+        }
+        fetchMembers({ force: true });
+      })
+      .subscribe();
 
     return () => {
       ignore = true;
+      supabase.removeChannel(membersChannel);
     };
   }, []);
 
@@ -207,34 +347,70 @@ export const MembershipCards = () => {
       if (!selectedMember) {
         setPayments([]);
         setPhotoUrl("");
+        setLoadingCardData(false);
         return;
       }
 
-      const [{ data, error }, signedPhotoUrl] = await Promise.all([
-        supabase
-          .from("payment_history")
-          .select("*")
-          .eq("member_id", selectedMember.id)
-          .order("payment_for_month", { ascending: false }),
-        getMemberFileSignedUrl(selectedMember.passportPhotoPath),
-      ]);
+      const hasCachedCardData = cardDataCache.has(getCardDataCacheKey(selectedMember));
+      setLoadingCardData(!hasCachedCardData);
 
-      if (ignore) return;
+      try {
+        const cardData = await loadMembershipCardData(selectedMember);
 
-      if (error) {
-        setNotice({ tone: "error", message: error.message });
-        setPayments([]);
-      } else {
-        setPayments(data || []);
+        if (ignore) return;
+
+        setPayments(cardData.payments);
+        setPhotoUrl(cardData.photoUrl);
+      } catch (error) {
+        if (!ignore) {
+          setNotice({ tone: "error", message: error.message });
+          setPayments([]);
+          setPhotoUrl("");
+        }
+      } finally {
+        if (!ignore) {
+          setLoadingCardData(false);
+        }
       }
-
-      setPhotoUrl(signedPhotoUrl);
     };
 
     loadCardData();
 
+    const paymentsChannel = selectedMember
+      ? supabase
+          .channel(`membership_cards_payments_changes_${selectedMember.id}`)
+          .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: "payment_history", filter: `member_id=eq.${selectedMember.id}` },
+            async () => {
+              clearCardDataForMember(selectedMember.id);
+              setLoadingCardData(true);
+
+              try {
+                const cardData = await loadMembershipCardData(selectedMember, { force: true });
+                if (!ignore) {
+                  setPayments(cardData.payments);
+                  setPhotoUrl(cardData.photoUrl);
+                }
+              } catch (error) {
+                if (!ignore) {
+                  setNotice({ tone: "error", message: error.message });
+                }
+              } finally {
+                if (!ignore) {
+                  setLoadingCardData(false);
+                }
+              }
+            },
+          )
+          .subscribe()
+      : null;
+
     return () => {
       ignore = true;
+      if (paymentsChannel) {
+        supabase.removeChannel(paymentsChannel);
+      }
     };
   }, [selectedMember]);
 
@@ -324,7 +500,7 @@ export const MembershipCards = () => {
             <SearchBar placeholder="Search members" value={searchQuery} onChange={setSearchQuery} />
           </div>
           <div className="max-h-[640px] overflow-y-auto p-2">
-            {loading && <div className="p-4 text-center text-sm text-slate-500">Loading members...</div>}
+            {loading && <MemberListSkeleton />}
             {!loading && filteredMembers.length === 0 && (
               <div className="flex flex-col items-center gap-2 p-6 text-center text-sm text-slate-500">
                 <Search size={18} />
@@ -360,7 +536,7 @@ export const MembershipCards = () => {
           </div>
         </aside>
 
-        <MembershipCardPreview member={selectedMember} payments={payments} photoUrl={photoUrl} />
+        <MembershipCardPreview member={selectedMember} payments={payments} photoUrl={photoUrl} isLoading={loadingCardData} />
       </div>
     </div>
   );

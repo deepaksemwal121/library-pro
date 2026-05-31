@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, ArrowUpRight, BarChart3, Brain, IndianRupee, Target, TrendingUp, Users } from "lucide-react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import supabase from "../../../helpers/supabase";
-import { loadManagementData } from "../librarymanagement/libraryStorage";
+import { loadExpensesFromDb } from "../librarymanagement/libraryStorage";
 import { getExitReasonLabel, getPaymentStatus, mapMemberFromDb } from "../members/memberUtils";
 
 const currency = new Intl.NumberFormat("en-IN", {
@@ -81,7 +81,10 @@ const Dashboard = () => {
       setLoading(true);
       setErrorMessage("");
 
-      const { data, error } = await supabase.from("library_members").select("*").order("created_at", { ascending: false });
+      const [{ data, error }, loadedExpenses] = await Promise.all([
+        supabase.from("library_members").select("*").order("created_at", { ascending: false }),
+        loadExpensesFromDb(),
+      ]);
 
       if (ignore) return;
 
@@ -92,7 +95,7 @@ const Dashboard = () => {
         setMembers(data.map(mapMemberFromDb));
       }
 
-      setExpenses(loadManagementData().expenses || []);
+      setExpenses(loadedExpenses);
       setLoading(false);
     };
 
@@ -107,9 +110,9 @@ const Dashboard = () => {
     const activeMembers = members.filter((member) => member.memberStatus === "active");
     const inactiveMembers = members.filter((member) => member.memberStatus === "inactive");
     const monthlyRevenue = activeMembers.reduce((total, member) => total + Number(member.feeAmount || 0), 0);
-    const monthlyExpense = expenses.reduce((total, expense) => total + Number(expense.amount || 0), 0);
+    const currentMonthExpenses = expenses.filter((expense) => isSameMonth(expense.date, 0));
+    const monthlyExpense = currentMonthExpenses.reduce((total, expense) => total + Number(expense.amount || 0), 0);
     const projectedProfit = monthlyRevenue - monthlyExpense;
-    const freeTierMembers = activeMembers.filter((member) => member.isFreeTier);
     const overdueMembers = activeMembers.filter((member) => getPaymentStatus(member.paidUntil, member).tone === "red");
     const dueMembers = activeMembers.filter((member) => getPaymentStatus(member.paidUntil, member).tone === "yellow");
     const joinedThisMonth = members.filter((member) => isSameMonth(member.registrationDate, 0)).length;
@@ -135,10 +138,10 @@ const Dashboard = () => {
       inactiveMembers,
       monthlyRevenue,
       monthlyExpense,
+      currentMonthExpenses,
       projectedProfit,
       overdueMembers,
       dueMembers,
-      freeTierMembers,
       joinedThisMonth,
       growthRate,
       churnRate,
@@ -171,7 +174,7 @@ const Dashboard = () => {
   }, [expenses, members]);
 
   const expenseMix = useMemo(() => {
-    const grouped = expenses.reduce((result, expense) => {
+    const grouped = metrics.currentMonthExpenses.reduce((result, expense) => {
       result[expense.category] = (result[expense.category] || 0) + Number(expense.amount || 0);
       return result;
     }, {});
@@ -180,7 +183,7 @@ const Dashboard = () => {
       .map(([name, value]) => ({ name, value }))
       .sort((first, second) => second.value - first.value)
       .slice(0, 6);
-  }, [expenses]);
+  }, [metrics.currentMonthExpenses]);
 
   const exitReasons = useMemo(() => {
     const grouped = metrics.inactiveMembers.reduce((result, member) => {
@@ -271,14 +274,14 @@ const Dashboard = () => {
         <KpiCard
           title="Operating Expense"
           value={currency.format(metrics.monthlyExpense)}
-          helper="From Library Management ledger"
+          helper="This month's Library Management ledger"
           icon={<BarChart3 size={20} />}
           tone="amber"
         />
         <KpiCard
           title="Active Members"
           value={metrics.activeMembers.length}
-          helper={`${metrics.joinedThisMonth} joined this month, ${metrics.freeTierMembers.length} free tier`}
+          helper={`${metrics.joinedThisMonth} joined this month`}
           icon={<Users size={20} />}
           tone="emerald"
         />

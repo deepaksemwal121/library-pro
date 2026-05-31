@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import supabase from "../../../helpers/supabase";
 import { mapMemberFromDb } from "../members/memberUtils";
-import { loadSeatFloors } from "./seatSettings";
+import { loadSeatFloors, normalizeSeatId } from "./seatSettings";
 
 export const SeatSelector = ({
   currentSeatNumber = null,
@@ -10,9 +10,10 @@ export const SeatSelector = ({
   occupiedSeats = null,
   onSeatSelect = () => {},
 }) => {
-  const floors = useMemo(loadSeatFloors, []);
-  const [activeFloorId, setActiveFloorId] = useState(currentFloor ?? floors[0]?.id ?? "second");
-  const [selectedSeat, setSelectedSeat] = useState(currentSeatNumber);
+  const floors = useMemo(() => loadSeatFloors(), []);
+  const initialFloor = floors.find((floor) => floor.id === currentFloor || floor.name === currentFloor) ?? floors[0];
+  const [activeFloorId, setActiveFloorId] = useState(initialFloor?.id ?? "second");
+  const [selectedSeat, setSelectedSeat] = useState(normalizeSeatId(currentSeatNumber));
   const [hoveredSeat, setHoveredSeat] = useState(null);
   const [dbOccupiedMembers, setDbOccupiedMembers] = useState([]);
   const [isLoadingSeats, setIsLoadingSeats] = useState(!occupiedMembers && !occupiedSeats);
@@ -23,9 +24,9 @@ export const SeatSelector = ({
   const activeSeats = activeFloor?.seats ?? [];
   const hasProvidedSeatData = Boolean(occupiedMembers || occupiedSeats);
   const memberDetails = occupiedMembers ?? dbOccupiedMembers;
-  const memberBySeat = useMemo(() => new Map(memberDetails.map((member) => [Number(member.seatNumber), member])), [memberDetails]);
+  const memberBySeat = useMemo(() => new Map(memberDetails.map((member) => [normalizeSeatId(member.seatNumber), member])), [memberDetails]);
   const occupiedSeatSet = useMemo(
-    () => new Set(occupiedSeats ?? memberDetails.map((member) => member.seatNumber)),
+    () => new Set((occupiedSeats ?? memberDetails.map((member) => member.seatNumber)).map(normalizeSeatId)),
     [memberDetails, occupiedSeats],
   );
   const hoveredMember = hoveredSeat ? memberBySeat.get(hoveredSeat) : null;
@@ -74,6 +75,9 @@ export const SeatSelector = ({
       onSeatSelect({
         seatNumber: seat,
         floor: activeFloor.name,
+        floorId: activeFloor.id,
+        baseFee: getSeatPriceValue(seat),
+        lockerAvailable: activeFloor.lockerAvailable !== false,
       });
     }
   };

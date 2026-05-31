@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import supabase from "../../../helpers/supabase";
 import { mapMemberFromDb } from "../members/memberUtils";
-import { loadSeatFloors } from "./seatSettings";
+import { loadSeatFloors, normalizeSeatId } from "./seatSettings";
 
 export const SeatLayoutView = ({ currentSeatNumber = null, currentFloor = null, occupiedMembers = null, occupiedSeats = null }) => {
-  const floors = useMemo(loadSeatFloors, []);
-  const [activeFloorId, setActiveFloorId] = useState(currentFloor ?? floors[0]?.id ?? "second");
+  const floors = useMemo(() => loadSeatFloors(), []);
+  const initialFloor = floors.find((floor) => floor.id === currentFloor || floor.name === currentFloor) ?? floors[0];
+  const [activeFloorId, setActiveFloorId] = useState(initialFloor?.id ?? "second");
   const [hoveredSeat, setHoveredSeat] = useState(null);
   const [dbOccupiedMembers, setDbOccupiedMembers] = useState([]);
   const [isLoadingSeats, setIsLoadingSeats] = useState(!occupiedMembers && !occupiedSeats);
@@ -16,9 +17,9 @@ export const SeatLayoutView = ({ currentSeatNumber = null, currentFloor = null, 
   const activeSeats = activeFloor?.seats ?? [];
   const hasProvidedSeatData = Boolean(occupiedMembers || occupiedSeats);
   const memberDetails = occupiedMembers ?? dbOccupiedMembers;
-  const memberBySeat = useMemo(() => new Map(memberDetails.map((member) => [Number(member.seatNumber), member])), [memberDetails]);
+  const memberBySeat = useMemo(() => new Map(memberDetails.map((member) => [normalizeSeatId(member.seatNumber), member])), [memberDetails]);
   const occupiedSeatSet = useMemo(
-    () => new Set(occupiedSeats ?? memberDetails.map((member) => member.seatNumber)),
+    () => new Set((occupiedSeats ?? memberDetails.map((member) => member.seatNumber)).map(normalizeSeatId)),
     [memberDetails, occupiedSeats],
   );
   const hoveredMember = hoveredSeat ? memberBySeat.get(hoveredSeat) : null;
@@ -108,7 +109,7 @@ export const SeatLayoutView = ({ currentSeatNumber = null, currentFloor = null, 
           {activeSeats.map((seat) => {
             const occupiedMember = memberBySeat.get(seat);
             const isOccupied = !shouldBlockSeatActions && occupiedSeatSet.has(seat);
-            const isCurrent = currentSeatNumber === seat;
+            const isCurrent = normalizeSeatId(currentSeatNumber) === seat;
             const seatPriceValue = getSeatPriceValue(seat);
             const hasCustomPrice = Number(activeFloor?.seatPrices?.[seat]) > 0;
             const seatTitle = occupiedMember

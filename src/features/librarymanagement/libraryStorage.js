@@ -38,14 +38,17 @@ export const createId = () => {
 // Load expenses from Supabase
 export const loadExpensesFromDb = async () => {
   try {
-    const { data, error } = await supabase.from("expenses").select("*").order("created_at", { ascending: false });
+    const { data, error } = await supabase.from("expenses").select("*").order("date", { ascending: false }).order("created_at", { ascending: false });
 
     if (error) {
       console.error("Error loading expenses:", error);
       return [];
     }
 
-    return data || [];
+    return (data || []).map((expense) => ({
+      ...expense,
+      paymentMode: expense.payment_mode || expense.paymentMode || "Cash",
+    }));
   } catch (error) {
     console.error("Error loading expenses:", error);
     return [];
@@ -83,7 +86,7 @@ export const saveExpenseToDb = async (expense) => {
           category: expense.category,
           amount: expense.amount,
           note: expense.note,
-          date: new Date().toISOString().split("T")[0],
+          date: expense.date || new Date().toISOString().split("T")[0],
         },
       ])
       .select();

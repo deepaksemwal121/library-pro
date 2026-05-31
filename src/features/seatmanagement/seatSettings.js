@@ -5,6 +5,7 @@ export const defaultSeatFloors = [
     id: "second",
     name: "Second Floor",
     price: 1100,
+    lockerAvailable: true,
     seatPrices: {},
     seats: Array.from({ length: 29 }, (_, index) => index + 1),
   },
@@ -12,10 +13,44 @@ export const defaultSeatFloors = [
     id: "first",
     name: "First Floor",
     price: 900,
+    lockerAvailable: true,
     seatPrices: {},
     seats: Array.from({ length: 56 }, (_, index) => index + 30),
   },
+  {
+    id: "free",
+    name: "Free Floor",
+    price: 0,
+    lockerAvailable: false,
+    seatPrices: {},
+    seats: ["A", "B", "C", "D", "E", "F"],
+  },
 ];
+
+export const normalizeSeatId = (seat) => String(seat ?? "").trim();
+
+export const isFreeFloor = (floor) => floor?.id === "free" || floor?.name?.toLowerCase() === "free floor";
+
+const sortSeats = (first, second) => {
+  const firstNumber = Number(first);
+  const secondNumber = Number(second);
+
+  if (Number.isFinite(firstNumber) && Number.isFinite(secondNumber)) {
+    return firstNumber - secondNumber;
+  }
+
+  return normalizeSeatId(first).localeCompare(normalizeSeatId(second), undefined, { numeric: true });
+};
+
+const normalizeFloor = (floor) => ({
+  ...floor,
+  price: Number(floor.price) || 0,
+  lockerAvailable: floor.lockerAvailable ?? !isFreeFloor(floor),
+  seatPrices: Object.fromEntries(
+    Object.entries(floor.seatPrices || {}).map(([seat, price]) => [normalizeSeatId(seat), Number(price) || 0]),
+  ),
+  seats: [...new Set((floor.seats || []).map(normalizeSeatId).filter(Boolean))].sort(sortSeats),
+});
 
 export const createFloorId = (name) => {
   const baseId = name
@@ -38,30 +73,31 @@ export const getSeatRange = (startSeat, seatCount) => {
   return Array.from({ length: count }, (_, index) => start + index);
 };
 
+const ensureDefaultFloors = (floors) => {
+  const normalizedFloors = floors.map(normalizeFloor);
+  const existingFloorIds = new Set(normalizedFloors.map((floor) => floor.id));
+  const missingDefaults = defaultSeatFloors.filter((floor) => !existingFloorIds.has(floor.id)).map(normalizeFloor);
+
+  return [...normalizedFloors, ...missingDefaults];
+};
+
 export const loadSeatFloors = () => {
   try {
     const savedFloors = localStorage.getItem(STORAGE_KEY);
 
     if (!savedFloors) {
-      return defaultSeatFloors;
+      return ensureDefaultFloors(defaultSeatFloors);
     }
 
     const parsedFloors = JSON.parse(savedFloors);
 
     if (!Array.isArray(parsedFloors) || parsedFloors.length === 0) {
-      return defaultSeatFloors;
+      return ensureDefaultFloors(defaultSeatFloors);
     }
 
-    return parsedFloors.map((floor) => ({
-      ...floor,
-      price: Number(floor.price) || 0,
-      seatPrices: Object.fromEntries(
-        Object.entries(floor.seatPrices || {}).map(([seat, price]) => [seat, Number(price) || 0]),
-      ),
-      seats: [...new Set((floor.seats || []).map(Number).filter(Boolean))].sort((first, second) => first - second),
-    }));
+    return ensureDefaultFloors(parsedFloors);
   } catch {
-    return defaultSeatFloors;
+    return ensureDefaultFloors(defaultSeatFloors);
   }
 };
 
@@ -70,12 +106,12 @@ export const saveSeatFloors = (floors) => {
 };
 
 export const getSeatBaseFeeFromSettings = (seatNumber) => {
-  const seat = Number(seatNumber);
+  const seat = normalizeSeatId(seatNumber);
   const floor = loadSeatFloors().find((item) => item.seats.includes(seat));
 
   if (floor) {
     return Number(floor.seatPrices?.[seat]) || Number(floor.price) || 0;
   }
 
-  return seat <= 29 ? 1100 : 900;
+  return Number(seat) <= 29 ? 1100 : 900;
 };

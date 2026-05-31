@@ -209,16 +209,12 @@ const MembershipCardPreview = ({ member, payments, photoUrl, isLoading }) => {
               <div className="text-sm font-medium text-slate-900">{member.isLockerTaken ? "Taken" : "Not taken"}</div>
             </div>
             <div>
-              <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Tier</div>
-              <div className="text-sm font-medium text-slate-900">{member.isFreeTier ? "Free tier" : "Paid member"}</div>
-            </div>
-            <div>
               <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Registered</div>
               <div className="text-sm font-medium text-slate-900">{formatDate(member.registrationDate)}</div>
             </div>
             <div>
               <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Paid Until</div>
-              <div className="text-sm font-medium text-slate-900">{member.isFreeTier ? "Free tier" : formatDate(member.paidUntil)}</div>
+              <div className="text-sm font-medium text-slate-900">{formatDate(member.paidUntil)}</div>
             </div>
           </div>
         </div>
@@ -532,7 +528,7 @@ export const MembershipCards = () => {
                     </div>
                     <div className="mt-1 flex items-center gap-1 text-xs text-slate-500">
                       <CreditCard size={12} />
-                      Seat {member.seatNumber} - {member.isFreeTier ? "Free tier" : member.isLockerTaken ? "Locker" : "No locker"}
+                      Seat {member.seatNumber} - {member.isLockerTaken ? "Locker" : "No locker"}
                     </div>
                   </div>
                 </button>

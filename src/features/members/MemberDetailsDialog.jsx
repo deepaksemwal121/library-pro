@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { ArrowLeft, Camera, FileImage, FolderOpen, Pencil, X } from "lucide-react";
+import { ArrowLeft, Camera, FileImage, FolderOpen, Pencil, UserCheck, X } from "lucide-react";
 import { SeatSelector } from "../seatmanagement/SeatSelector";
 import { getMemberFileSignedUrl } from "./memberFiles";
+import { loadMemberSeatHistory } from "./memberSeatHistory";
 import { EXIT_REASON_OPTIONS } from "./memberUtils";
 
 const getEditableMemberData = (member) => ({
@@ -13,10 +14,10 @@ const getEditableMemberData = (member) => ({
   idType: member.idType,
   idNumber: member.idNumber,
   registrationDate: member.registrationDate,
-  isFreeTier: member.isFreeTier,
   lockerTaken: member.isLockerTaken,
   seatNumber: member.seatNumber,
   seatFloor: member.seatFloor,
+  seatLockerAvailable: member.seatFloor !== "Free Floor",
   feeAmount: member.feeAmount ?? "",
   paymentMethod: member.paymentMethod,
   transactionNotes: member.transactionNotes || "",
@@ -33,20 +34,45 @@ const getInitialLeftData = () => ({
   exitNotes: "",
 });
 
-export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, onSave, onMarkLeft }) => {
+const formatDisplayDate = (dateValue) => {
+  if (!dateValue) return "Not added";
+
+  return new Date(`${dateValue}T00:00:00`).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
+export const MemberDetailsDialog = ({
+  member,
+  members = [],
+  open,
+  onOpenChange,
+  onSave,
+  onMarkLeft,
+  onReactivate,
+  isLeftMember = false,
+}) => {
   const [formData, setFormData] = useState(() => (member ? getEditableMemberData(member) : null));
   const [leftData, setLeftData] = useState(getInitialLeftData);
   const [notice, setNotice] = useState({ tone: "", message: "" });
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isMarkingLeft, setIsMarkingLeft] = useState(false);
+  const [isReactivating, setIsReactivating] = useState(false);
   const [idDocumentFile, setIdDocumentFile] = useState(null);
   const [passportPhotoFile, setPassportPhotoFile] = useState(null);
   const [documentUrls, setDocumentUrls] = useState({ idDocument: "", passportPhoto: "" });
+  const [seatHistory, setSeatHistory] = useState([]);
+  const [isLoadingSeatHistory, setIsLoadingSeatHistory] = useState(false);
+  const [seatHistoryError, setSeatHistoryError] = useState("");
 
   const occupiedMembers = useMemo(() => members.filter((item) => item.id !== member?.id), [member?.id, members]);
   const occupiedSeats = useMemo(() => occupiedMembers.map((item) => item.seatNumber), [occupiedMembers]);
-  const hasSeatChanged = Number(formData?.seatNumber) !== Number(member?.seatNumber);
+  const hasSeatChanged =
+    String(formData?.seatNumber ?? "") !== String(member?.seatNumber ?? "") ||
+    String(formData?.seatFloor ?? "") !== String(member?.seatFloor ?? "");
   const canSubmitExit = !formData?.lockerTaken || (leftData.lockerSecurityRefunded && leftData.lockerKeysReturned);
 
   useEffect(() => {
@@ -72,6 +98,38 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
     };
   }, [member]);
 
+  useEffect(() => {
+    let ignore = false;
+
+    const loadSeatHistory = async () => {
+      if (!member?.id) return;
+
+      setIsLoadingSeatHistory(true);
+      setSeatHistoryError("");
+      try {
+        const history = await loadMemberSeatHistory(member.id);
+        if (!ignore) {
+          setSeatHistory(history);
+        }
+      } catch (error) {
+        if (!ignore) {
+          setSeatHistory([]);
+          setSeatHistoryError(error.message || "Seat history could not be loaded.");
+        }
+      } finally {
+        if (!ignore) {
+          setIsLoadingSeatHistory(false);
+        }
+      }
+    };
+
+    loadSeatHistory();
+
+    return () => {
+      ignore = true;
+    };
+  }, [member?.id]);
+
   if (!member || !formData) return null;
 
   const handleChange = (e) => {
@@ -82,13 +140,6 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
         ...prev,
         [name]: type === "checkbox" ? checked : value,
       };
-
-      if (name === "isFreeTier" && checked) {
-        return {
-          ...next,
-          feeAmount: 0,
-        };
-      }
 
       return next;
     });
@@ -103,12 +154,14 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
     }));
   };
 
-  const handleSeatPick = ({ seatNumber, floor }) => {
+  const handleSeatPick = ({ seatNumber, floor, lockerAvailable = true }) => {
     setNotice({ tone: "warning", message: "Seat changed. Save changes to update this member's allotted seat." });
     setFormData((prev) => ({
       ...prev,
       seatNumber,
       seatFloor: floor,
+      seatLockerAvailable: lockerAvailable,
+      lockerTaken: lockerAvailable ? prev.lockerTaken : false,
     }));
   };
 
@@ -151,7 +204,7 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
       return;
     }
 
-    if (!formData.isFreeTier && Number(formData.feeAmount) < 0) {
+    if (Number(formData.feeAmount) < 0) {
       setNotice({ tone: "error", message: "Fee amount cannot be negative." });
       return;
     }
@@ -197,6 +250,19 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
     }
   };
 
+  const handleReactivate = async () => {
+    setIsReactivating(true);
+    const didReactivate = await onReactivate(member.id);
+    setIsReactivating(false);
+
+    if (!didReactivate) {
+      setNotice({
+        tone: "error",
+        message: "Could not reactivate this member. If their old seat is occupied, edit the member and choose an available seat first.",
+      });
+    }
+  };
+
   return (
     <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <Dialog.Portal>
@@ -206,7 +272,11 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
             <div>
               <Dialog.Title className="text-xl font-bold text-slate-900">Member Details</Dialog.Title>
               <Dialog.Description className="text-sm text-slate-500">
-                {isEditing ? "Edit details, change seat, or close this membership." : "Review this member's saved details."}
+                {isEditing
+                  ? isLeftMember
+                    ? "Edit details or assign an available seat before reactivating."
+                    : "Edit details, change seat, or close this membership."
+                  : "Review this member's saved details."}
               </Dialog.Description>
             </div>
             <Dialog.Close asChild>
@@ -254,11 +324,18 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
                   ["ID Type", member.idType],
                   ["ID Number", member.idNumber],
                   ["Seat", `${member.seatNumber} (${member.seatFloor} floor)`],
-                  ["Membership Tier", member.isFreeTier ? "Free tier" : "Paid member"],
                   ["Locker Taken", member.isLockerTaken ? "Yes" : "No"],
-                  ["Fee Amount", member.isFreeTier ? "Rs.0 (free tier)" : member.feeAmount ? `Rs.${member.feeAmount}` : "Not added"],
-                  ["Payment Method", member.isFreeTier ? "Not applicable" : member.paymentMethod || "Not added"],
-                  ["Paid Until", member.isFreeTier ? "Free tier" : member.paidUntil || "Not added"],
+                  ["Fee Amount", member.feeAmount !== null && member.feeAmount !== undefined ? `Rs.${member.feeAmount}` : "Not added"],
+                  ["Payment Method", member.paymentMethod || "Not added"],
+                  ["Paid Until", member.paidUntil || "Not added"],
+                  ...(isLeftMember
+                    ? [
+                        ["Left On", formatDisplayDate(member.leftAt)],
+                        ["Exit Reason", member.exitNotes || "No reason recorded"],
+                        ["Locker Security Refunded", member.lockerSecurityRefunded ? "Yes" : "No"],
+                        ["Locker Keys Returned", member.lockerKeysReturned ? "Yes" : "No"],
+                      ]
+                    : []),
                   ["ID Document", member.idDocumentPath ? "Uploaded" : "Not uploaded"],
                   ["Transaction Notes", member.transactionNotes || "Not added"],
                 ].map(([label, value]) => (
@@ -267,6 +344,65 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
                     <div className="mt-1 break-words text-sm font-medium text-slate-900">{value}</div>
                   </div>
                 ))}
+              </div>
+
+              <div className="rounded-md border border-slate-200 p-3">
+                <h3 className="font-bold text-slate-900">Seat History</h3>
+                {isLoadingSeatHistory && <p className="mt-2 text-sm text-slate-500">Loading seat history...</p>}
+                {!isLoadingSeatHistory && seatHistoryError && (
+                  <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-sm text-amber-800">
+                    Seat history table is not available yet. Showing this member's saved seat below.
+                  </div>
+                )}
+                {!isLoadingSeatHistory && seatHistory.length === 0 && (
+                  <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      {isLeftMember ? "Last saved seat" : "Current saved seat"}
+                    </div>
+                    <div className="mt-1 font-semibold text-slate-900">
+                      Seat {member.seatNumber} ({member.seatFloor} floor)
+                    </div>
+                    <div className="mt-1 text-slate-500">
+                      {seatHistoryError
+                        ? "Apply the seat-history migration to see full from/to movement records."
+                        : "No earlier seat changes have been recorded for this member yet."}
+                    </div>
+                  </div>
+                )}
+                {!isLoadingSeatHistory && seatHistory.length > 0 && (
+                  <div className="mt-3 overflow-x-auto">
+                    <table className="w-full min-w-[560px] text-left text-sm">
+                      <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
+                        <tr>
+                          <th className="px-3 py-2">Date</th>
+                          <th className="px-3 py-2">From</th>
+                          <th className="px-3 py-2">To</th>
+                          <th className="px-3 py-2">Reason</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {seatHistory.map((entry) => (
+                          <tr key={entry.id}>
+                            <td className="px-3 py-2 text-slate-700">
+                              {new Date(entry.changed_at).toLocaleDateString("en-IN", {
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric",
+                              })}
+                            </td>
+                            <td className="px-3 py-2 text-slate-600">
+                              {entry.from_seat_number ? `${entry.from_seat_number} (${entry.from_seat_floor} floor)` : "-"}
+                            </td>
+                            <td className="px-3 py-2 font-semibold text-slate-900">
+                              {entry.to_seat_number} ({entry.to_seat_floor} floor)
+                            </td>
+                            <td className="px-3 py-2 text-slate-600">{entry.reason || "-"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -309,15 +445,26 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
                 </div>
               </div>
 
-              <div className="flex justify-end border-t pt-4">
+              <div className="flex flex-col justify-end gap-2 border-t pt-4 sm:flex-row">
                 <button
                   type="button"
                   onClick={handleStartEditing}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700 sm:w-auto"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-2 font-semibold text-blue-700 hover:bg-blue-100 sm:w-auto"
                 >
                   <Pencil size={16} />
                   Edit Details
                 </button>
+                {isLeftMember && (
+                  <button
+                    type="button"
+                    onClick={handleReactivate}
+                    disabled={isReactivating}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-300 sm:w-auto"
+                  >
+                    <UserCheck size={16} />
+                    {isReactivating ? "Reactivating..." : "Make Active Again"}
+                  </button>
+                )}
               </div>
             </div>
           ) : (
@@ -399,8 +546,7 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
                       name="paymentMethod"
                       value={formData.paymentMethod}
                       onChange={handleChange}
-                      disabled={formData.isFreeTier}
-                      className="w-full rounded-md border bg-white p-2 disabled:cursor-not-allowed disabled:opacity-70"
+                      className="w-full rounded-md border bg-white p-2"
                     >
                       <option>Cash</option>
                       <option>Online</option>
@@ -413,17 +559,20 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
                       name="feeAmount"
                       value={formData.feeAmount}
                       onChange={handleChange}
-                      disabled={formData.isFreeTier}
-                      className="w-full rounded-md border p-2 outline-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
+                      min="0"
+                      className="w-full rounded-md border p-2 outline-blue-500"
                     />
                   </div>
-                  <label className="flex items-center gap-2 pt-7 text-sm text-emerald-800">
-                    <input type="checkbox" name="isFreeTier" checked={formData.isFreeTier} onChange={handleChange} className="h-4 w-4" />
-                    Free tier member
-                  </label>
                   <label className="flex items-center gap-2 pt-7 text-sm text-slate-700">
-                    <input type="checkbox" name="lockerTaken" checked={formData.lockerTaken} onChange={handleChange} className="h-4 w-4" />
-                    Locker Taken
+                    <input
+                      type="checkbox"
+                      name="lockerTaken"
+                      checked={formData.lockerTaken}
+                      onChange={handleChange}
+                      disabled={!formData.seatLockerAvailable}
+                      className="h-4 w-4"
+                    />
+                    {formData.seatLockerAvailable ? "Locker Taken" : "Locker not available for this seat"}
                   </label>
                 </div>
 
@@ -532,6 +681,7 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
                 </div>
               </form>
 
+              {!isLeftMember && (
               <div className="mt-6 border-t pt-5">
                 <h3 className="font-bold text-slate-900">Member Leaving Library</h3>
                 <div className="mt-2 border border-red-100 bg-red-50 p-3 text-sm text-red-700">
@@ -615,6 +765,7 @@ export const MemberDetailsDialog = ({ member, members = [], open, onOpenChange, 
                   {isMarkingLeft ? "Removing..." : "Mark Member Left"}
                 </button>
               </div>
+              )}
             </>
           )}
         </Dialog.Content>

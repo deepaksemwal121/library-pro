@@ -6,7 +6,7 @@ import { roleLabel, useCurrentUserProfile } from "../../features/settings/userPr
 
 const Sidebar = () => {
   const navigate = useNavigate();
-  const { settings, isLoading } = useLibrarySettings();
+  const { settings } = useLibrarySettings();
   const { libraryName, logoDataUrl, themeColor } = settings || {};
   const { profile } = useCurrentUserProfile();
   const themeTextColor = getReadableTextColor(themeColor || "#2563eb");

@@ -6,7 +6,6 @@ import { ExpenseTable } from "./ExpenseTable";
 import { ManagementStatCard } from "./ManagementStatCard";
 import { TodoPanel } from "./TodoPanel";
 import {
-  createId,
   loadManagementData,
   saveManagementData,
   loadExpensesFromDb,
@@ -16,7 +15,6 @@ import {
   saveTodoToDb,
   updateTodoInDb,
   deleteTodoFromDb,
-  defaultCategories,
 } from "./libraryStorage";
 
 const currency = new Intl.NumberFormat("en-IN", {

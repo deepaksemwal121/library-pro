@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ChevronLeft, ChevronRight, Eye, History } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Eye, History, UserCheck } from "lucide-react";
 import { MemberDetailsDialog } from "./MemberDetailsDialog";
 import { PaymentHistoryDialog } from "./PaymentHistoryDialog";
 import { getMemberFileSignedUrl } from "./memberFiles";
@@ -7,12 +7,21 @@ import { getPaymentStatus } from "./memberUtils";
 
 const statusClasses = {
   green: "text-emerald-700 bg-emerald-50",
-  free: "text-sky-700 bg-sky-50",
   yellow: "text-amber-700 bg-amber-50",
   red: "text-red-700 bg-red-50",
 };
 
 const MEMBERS_PER_PAGE = 10;
+
+const formatDate = (dateValue) => {
+  if (!dateValue) return "Not added";
+
+  return new Date(`${dateValue}T00:00:00`).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
 
 const MemberPhoto = ({ member }) => {
   const [photoUrl, setPhotoUrl] = useState("");
@@ -49,8 +58,11 @@ export const MembersTable = ({
   members = [],
   loading = false,
   emptyMessage = "No members registered yet.",
+  viewMode = "active",
+  activeMembers = members,
   onSaveMember = () => {},
   onMarkLeft = () => {},
+  onReactivateMember = () => {},
   onPaymentsChanged = () => {},
 }) => {
   const [selectedMember, setSelectedMember] = useState(null);
@@ -60,6 +72,7 @@ export const MembersTable = ({
   const currentPage = Math.min(requestedPage, totalPages);
   const startRecord = members.length === 0 ? 0 : (currentPage - 1) * MEMBERS_PER_PAGE + 1;
   const endRecord = Math.min(currentPage * MEMBERS_PER_PAGE, members.length);
+  const isLeftView = viewMode === "left";
   const visibleMembers = useMemo(() => {
     const startIndex = (currentPage - 1) * MEMBERS_PER_PAGE;
     return members.slice(startIndex, startIndex + MEMBERS_PER_PAGE);
@@ -76,8 +89,12 @@ export const MembersTable = ({
                 <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500">Contact</th>
                 <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500">Seat</th>
                 <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500">Locker</th>
-                <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500">Paid Until</th>
-                <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500">Status</th>
+                <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                  {isLeftView ? "Left On" : "Paid Until"}
+                </th>
+                <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                  {isLeftView ? "Exit Reason" : "Status"}
+                </th>
                 <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500">Action</th>
               </tr>
             </thead>
@@ -100,7 +117,7 @@ export const MembersTable = ({
 
               {!loading &&
                 visibleMembers.map((member, index) => {
-                  const paymentStatus = getPaymentStatus(member.paidUntil, member);
+                  const paymentStatus = isLeftView ? null : getPaymentStatus(member.paidUntil, member);
 
                   return (
                     <tr key={member.id} className={`${index % 2 === 0 ? "bg-white" : "bg-slate-50/50"} transition-colors hover:bg-sky-50/70`}>
@@ -110,11 +127,6 @@ export const MembersTable = ({
                           <div className="min-w-0">
                             <div className="truncate font-semibold text-slate-900">{member.fullName}</div>
                             <div className="mt-0.5 text-xs text-slate-500">Seat {member.seatNumber}</div>
-                            {member.isFreeTier && (
-                              <div className="mt-1 inline-flex rounded-sm bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700">
-                                Free tier
-                              </div>
-                            )}
                             {!member.idDocumentPath && (
                               <div className="mt-1 inline-flex items-center gap-1 rounded-sm bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
                                 <AlertTriangle size={11} />
@@ -129,11 +141,15 @@ export const MembersTable = ({
                         {member.seatNumber} <span className="text-xs text-slate-400">({member.seatFloor} floor)</span>
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-600">{member.isLockerTaken ? "Yes" : "No"}</td>
-                      <td className="px-4 py-3 text-sm text-slate-600">{member.isFreeTier ? "Free tier" : member.paidUntil}</td>
+                      <td className="px-4 py-3 text-sm text-slate-600">{isLeftView ? formatDate(member.leftAt) : member.paidUntil}</td>
                       <td className="px-4 py-3 text-sm">
-                        <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${statusClasses[paymentStatus.tone]}`}>
-                          {paymentStatus.label}
-                        </span>
+                        {isLeftView ? (
+                          <span className="line-clamp-2 text-slate-600">{member.exitNotes || "No reason recorded"}</span>
+                        ) : (
+                          <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${statusClasses[paymentStatus.tone]}`}>
+                            {paymentStatus.label}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <div className="flex flex-wrap gap-1.5">
@@ -155,6 +171,17 @@ export const MembersTable = ({
                           >
                             <History size={15} />
                           </button>
+                          {isLeftView && (
+                            <button
+                              type="button"
+                              aria-label={`Reactivate ${member.fullName}`}
+                              title="Make active again"
+                              onClick={() => onReactivateMember(member.id)}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-emerald-100 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                            >
+                              <UserCheck size={15} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -200,7 +227,9 @@ export const MembersTable = ({
       <MemberDetailsDialog
         key={selectedMember?.id ?? "member-details"}
         member={selectedMember}
-        members={members}
+        members={viewMode === "left" ? activeMembers : members}
+        activeMembers={activeMembers}
+        isLeftMember={selectedMember?.memberStatus === "inactive" || viewMode === "left"}
         open={Boolean(selectedMember)}
         onOpenChange={(isOpen) => !isOpen && setSelectedMember(null)}
         onSave={async (...args) => {
@@ -212,6 +241,12 @@ export const MembersTable = ({
         onMarkLeft={async (...args) => {
           const didMarkLeft = await onMarkLeft(...args);
           if (didMarkLeft) {
+            setSelectedMember(null);
+          }
+        }}
+        onReactivate={async (...args) => {
+          const didReactivate = await onReactivateMember(...args);
+          if (didReactivate) {
             setSelectedMember(null);
           }
         }}

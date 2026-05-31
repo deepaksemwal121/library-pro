@@ -2,11 +2,10 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Plus, Settings } from "lucide-react";
 import supabase from "../../../helpers/supabase";
 import { getPaymentStatus, mapMemberFromDb } from "../members/memberUtils";
-import { createFloorId, getSeatRange, loadSeatFloors, saveSeatFloors } from "./seatSettings";
+import { createFloorId, getSeatRange, isFreeFloor, loadSeatFloors, normalizeSeatId, saveSeatFloors } from "./seatSettings";
 
 const statusClasses = {
   green: "text-emerald-700 bg-emerald-50 border-emerald-200",
-  free: "text-sky-700 bg-sky-50 border-sky-200",
   yellow: "text-yellow-800 bg-yellow-50 border-yellow-200",
   red: "text-red-700 bg-red-50 border-red-200",
 };
@@ -47,10 +46,13 @@ export const SeatManagement = ({ onSeatSelect = () => {}, isLockerChecked = fals
   const hasProvidedSeatData = Boolean(occupiedMembers || occupiedSeats);
   const memberDetails = occupiedMembers ?? dbOccupiedMembers;
   const memberBySeat = useMemo(
-    () => new Map(memberDetails.map((member) => [Number(member.seatNumber), member])),
+    () => new Map(memberDetails.map((member) => [normalizeSeatId(member.seatNumber), member])),
     [memberDetails],
   );
-  const occupiedSeatSet = useMemo(() => new Set(occupiedSeats ?? memberDetails.map((member) => member.seatNumber)), [memberDetails, occupiedSeats]);
+  const occupiedSeatSet = useMemo(
+    () => new Set((occupiedSeats ?? memberDetails.map((member) => member.seatNumber)).map(normalizeSeatId)),
+    [memberDetails, occupiedSeats],
+  );
   const hoveredMember = hoveredSeat ? memberBySeat.get(hoveredSeat) : null;
   const occupiedOnFloor = activeSeats.filter((seat) => occupiedSeatSet.has(seat)).length;
   const availableOnFloor = activeSeats.length - occupiedOnFloor;
@@ -110,9 +112,11 @@ export const SeatManagement = ({ onSeatSelect = () => {}, isLockerChecked = fals
   const handleAddFloor = (event) => {
     event.preventDefault();
 
-    const seats = getSeatRange(floorForm.startSeat, floorForm.seatCount).filter((seat) => !allSeatNumbers.has(seat));
+    const seats = getSeatRange(floorForm.startSeat, floorForm.seatCount)
+      .map(normalizeSeatId)
+      .filter((seat) => !allSeatNumbers.has(seat));
 
-    if (!floorForm.name.trim() || !floorForm.price || seats.length === 0) {
+    if (!floorForm.name.trim() || floorForm.price === "" || seats.length === 0) {
       return;
     }
 
@@ -120,6 +124,7 @@ export const SeatManagement = ({ onSeatSelect = () => {}, isLockerChecked = fals
       id: createFloorId(floorForm.name),
       name: floorForm.name.trim(),
       price: Number(floorForm.price),
+      lockerAvailable: true,
       seatPrices: {},
       seats,
     };
@@ -134,7 +139,9 @@ export const SeatManagement = ({ onSeatSelect = () => {}, isLockerChecked = fals
   const handleAddSeats = (event) => {
     event.preventDefault();
 
-    const seats = getSeatRange(seatForm.startSeat, seatForm.seatCount).filter((seat) => !allSeatNumbers.has(seat));
+    const seats = getSeatRange(seatForm.startSeat, seatForm.seatCount)
+      .map(normalizeSeatId)
+      .filter((seat) => !allSeatNumbers.has(seat));
 
     if (!activeFloor || seats.length === 0) {
       return;
@@ -145,7 +152,9 @@ export const SeatManagement = ({ onSeatSelect = () => {}, isLockerChecked = fals
         floor.id === resolvedActiveFloorId
           ? {
               ...floor,
-              seats: [...floor.seats, ...seats].sort((first, second) => first - second),
+              seats: [...floor.seats, ...seats].sort((first, second) =>
+                String(first).localeCompare(String(second), undefined, { numeric: true }),
+              ),
             }
           : floor,
       ),
@@ -156,7 +165,7 @@ export const SeatManagement = ({ onSeatSelect = () => {}, isLockerChecked = fals
   const handleSetSeatPrice = (event) => {
     event.preventDefault();
 
-    const seatNumber = Number(seatPriceForm.seatNumber);
+    const seatNumber = normalizeSeatId(seatPriceForm.seatNumber);
     const price = Number(seatPriceForm.price);
 
     if (!activeFloor || !activeFloor.seats.includes(seatNumber) || price < 0) {
@@ -186,10 +195,18 @@ export const SeatManagement = ({ onSeatSelect = () => {}, isLockerChecked = fals
 
     setSelectedSeat(seatNumber);
     const baseFee = getSeatPrice(seatNumber);
-    const totalFee = isLockerChecked ? baseFee + 500 : baseFee;
+    const lockerFee = activeFloor.lockerAvailable === false ? 0 : isLockerChecked ? 500 : 0;
+    const totalFee = baseFee + lockerFee;
 
     // Pass this data back to your Registration Form
-    onSeatSelect({ seatNumber, floor: activeFloor.name, floorId: activeFloor.id, baseFee, totalFee });
+    onSeatSelect({
+      seatNumber,
+      floor: activeFloor.name,
+      floorId: activeFloor.id,
+      baseFee,
+      totalFee,
+      lockerAvailable: activeFloor.lockerAvailable !== false,
+    });
   };
 
   return (
@@ -211,7 +228,7 @@ export const SeatManagement = ({ onSeatSelect = () => {}, isLockerChecked = fals
               />
               <input
                 type="number"
-                min="1"
+                min="0"
                 value={floorForm.price}
                 onChange={(event) => setFloorForm((previous) => ({ ...previous, price: event.target.value }))}
                 className="rounded-md border border-slate-200 bg-slate-50 p-2 text-sm outline-blue-500"
@@ -311,6 +328,9 @@ export const SeatManagement = ({ onSeatSelect = () => {}, isLockerChecked = fals
               </button>
             </form>
             <p className="text-xs text-slate-500">Seat numbers are kept unique across floors to match existing member records.</p>
+            {isFreeFloor(activeFloor) && (
+              <p className="text-xs font-medium text-emerald-700">Free Floor seats are fixed at Rs.0 and do not include locker facility.</p>
+            )}
           </div>
         </div>
       )}
@@ -414,7 +434,7 @@ export const SeatManagement = ({ onSeatSelect = () => {}, isLockerChecked = fals
                 <span className="text-slate-500">Registered:</span> {hoveredMember.registrationDate}
               </div>
               <div>
-                <span className="text-slate-500">Paid until:</span> {hoveredMember.isFreeTier ? "Free tier" : hoveredMember.paidUntil}
+                <span className="text-slate-500">Paid until:</span> {hoveredMember.paidUntil}
               </div>
               <span className={`inline-block border px-2 py-0.5 font-semibold ${statusClasses[getPaymentStatus(hoveredMember.paidUntil, hoveredMember).tone]}`}>
                 {getPaymentStatus(hoveredMember.paidUntil, hoveredMember).label}

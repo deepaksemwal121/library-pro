@@ -5,6 +5,7 @@ import { SeatManagement } from "../seatmanagement/SeatManagement";
 import { getSeatBaseFeeFromSettings } from "../seatmanagement/seatSettings";
 import { useToast } from "../../components/ui/toastContext";
 import { uploadMemberFile } from "./memberFiles";
+import { recordSeatHistory } from "./memberSeatHistory";
 import { getEndOfMonth } from "./memberUtils";
 
 const LOCKER_FEE = 500;
@@ -34,11 +35,11 @@ const initialFormData = {
   idType: "Aadhar",
   idNumber: "",
   registrationDate: "",
-  isFreeTier: false,
   lockerTaken: false,
   seatNumber: "",
   seatFloor: "",
   seatBaseFee: "",
+  seatLockerAvailable: true,
   feeAmount: "",
   paymentMethod: "Cash",
   transactionNotes: "",
@@ -61,8 +62,8 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
 
     const baseFee = Number(formData.seatBaseFee) || getSeatBaseFeeFromSettings(formData.seatNumber);
     const midMonthDiscount = isAfterMidMonth(formData.registrationDate);
-    const seatFee = formData.isFreeTier ? 0 : midMonthDiscount ? baseFee / 2 : baseFee;
-    const lockerFee = formData.isFreeTier ? 0 : formData.lockerTaken ? LOCKER_FEE : 0;
+    const seatFee = midMonthDiscount ? baseFee / 2 : baseFee;
+    const lockerFee = formData.seatLockerAvailable && formData.lockerTaken ? LOCKER_FEE : 0;
 
     return {
       baseFee,
@@ -70,20 +71,22 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
       lockerFee,
       midMonthDiscount,
     };
-  }, [formData.isFreeTier, formData.lockerTaken, formData.registrationDate, formData.seatBaseFee, formData.seatNumber]);
+  }, [formData.lockerTaken, formData.registrationDate, formData.seatBaseFee, formData.seatLockerAvailable, formData.seatNumber]);
 
   const withSuggestedFee = (data) => ({
     ...data,
-    feeAmount: data.isFreeTier ? 0 : calculateSuggestedFee(data.seatNumber, data.lockerTaken, data.registrationDate, data.seatBaseFee),
+    feeAmount: calculateSuggestedFee(data.seatNumber, data.seatLockerAvailable && data.lockerTaken, data.registrationDate, data.seatBaseFee),
   });
 
-  const handleSeatPick = ({ seatNumber, floor, baseFee }) => {
+  const handleSeatPick = ({ seatNumber, floor, baseFee, lockerAvailable = true }) => {
     setFormData((prev) =>
       withSuggestedFee({
         ...prev,
         seatNumber,
         seatFloor: floor,
         seatBaseFee: baseFee,
+        seatLockerAvailable: lockerAvailable,
+        lockerTaken: lockerAvailable ? prev.lockerTaken : false,
       }),
     );
   };
@@ -97,7 +100,7 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
         [name]: type === "checkbox" ? checked : value,
       };
 
-      if (name === "isFreeTier" || name === "lockerTaken" || name === "registrationDate") {
+      if (name === "lockerTaken" || name === "registrationDate") {
         return withSuggestedFee(next);
       }
 
@@ -145,11 +148,10 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
         id_type: formData.idType,
         id_number: formData.idNumber,
         registration_date: formData.registrationDate,
-        is_free_tier: formData.isFreeTier,
         locker_taken: formData.lockerTaken,
         seat_number: formData.seatNumber,
         seat_floor: formData.seatFloor,
-        fee_amount: formData.isFreeTier ? 0 : Number(formData.feeAmount),
+        fee_amount: Number(formData.feeAmount),
         payment_method: formData.paymentMethod,
         transaction_notes: formData.transactionNotes || null,
         paid_until: getEndOfMonth(formData.registrationDate),
@@ -169,15 +171,16 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
       return;
     }
 
-    if (formData.isFreeTier) {
-      setIsSubmitting(false);
-      toast.success("Free tier member registered", { message: "No payment was recorded for this member." });
-      setFormData({ ...initialFormData });
-      setIdDocumentFile(null);
-      setPassportPhotoFile(null);
-      setFormVersion((version) => version + 1);
-      onMemberCreated();
-      return;
+    const { error: seatHistoryError } = await recordSeatHistory({
+      memberId: data.id,
+      toSeatNumber: formData.seatNumber,
+      toSeatFloor: formData.seatFloor,
+      changedAt: new Date(`${formData.registrationDate}T00:00:00`).toISOString(),
+      reason: "Initial seat allotment",
+    });
+
+    if (seatHistoryError) {
+      toast.warning("Member created, seat history not recorded", { message: seatHistoryError.message, duration: 7500 });
     }
 
     const totalRegistrationAmount = Number(formData.feeAmount);
@@ -332,27 +335,14 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
               type="checkbox"
               name="lockerTaken"
               id="locker"
+              disabled={!formData.seatLockerAvailable}
               className="h-4 w-4 text-blue-600 rounded"
             />
             <label htmlFor="locker" className="ml-2 text-sm text-gray-700">
-              Locker Taken
+              {formData.seatLockerAvailable ? "Locker Taken" : "Locker not available for this seat"}
             </label>
           </div>
         </div>
-
-        <label className="flex items-start gap-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
-          <input
-            checked={formData.isFreeTier}
-            onChange={handleChange}
-            type="checkbox"
-            name="isFreeTier"
-            className="mt-0.5 h-4 w-4 rounded text-emerald-600"
-          />
-          <span>
-            <span className="block font-semibold">Free tier member</span>
-            <span className="text-emerald-700">No registration, monthly, or locker fee will be recorded for this member.</span>
-          </span>
-        </label>
 
         <div className="pt-4 border-t mt-4 space-y-3">
           <div>
@@ -378,7 +368,7 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
         <div className="pt-4 border-t mt-4 space-y-4">
           {feeBreakdown && (
             <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-              {formData.isFreeTier && <div className="font-semibold text-emerald-700">Free tier applied: total payable is Rs.0.</div>}
+              {feeBreakdown.baseFee === 0 && <div className="font-semibold text-emerald-700">Zero-fee seat selected: total payable can be Rs.0.</div>}
               <div>Seat fee: Rs.{feeBreakdown.seatFee}</div>
               {feeBreakdown.midMonthDiscount && <div>Mid-month joining applied: half seat fee charged after the 15th.</div>}
               <div>Locker fee: Rs.{feeBreakdown.lockerFee}</div>
@@ -394,8 +384,8 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
                 value={formData.feeAmount}
                 onChange={handleChange}
                 required
-                disabled={formData.isFreeTier}
-                className="w-full border rounded-md p-2 border-green-200 bg-green-50 focus:ring-green-500 disabled:cursor-not-allowed disabled:opacity-70"
+                min="0"
+                className="w-full border rounded-md p-2 border-green-200 bg-green-50 focus:ring-green-500"
                 placeholder="0.00"
               />
             </div>
@@ -405,8 +395,7 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
                 name="paymentMethod"
                 value={formData.paymentMethod}
                 onChange={handleChange}
-                disabled={formData.isFreeTier}
-                className="w-full border rounded-md p-2 bg-white disabled:cursor-not-allowed disabled:opacity-70"
+                className="w-full border rounded-md p-2 bg-white"
               >
                 <option>Cash</option>
                 <option>Online</option>

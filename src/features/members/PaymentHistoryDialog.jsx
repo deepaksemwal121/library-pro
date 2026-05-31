@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X, Plus, Trash2 } from "lucide-react";
 import supabase from "../../../helpers/supabase";
+import { getEndOfMonth, getStartOfMonth } from "./memberUtils";
 
 const MEMBERSHIP_PAYMENT_TYPES = ["Registration Fee", "Monthly Fee"];
 
@@ -10,11 +11,6 @@ const formatLocalDate = (date) => {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-};
-
-const getEndOfMonth = (dateValue) => {
-  const date = new Date(`${dateValue}T00:00:00`);
-  return formatLocalDate(new Date(date.getFullYear(), date.getMonth() + 1, 0));
 };
 
 const getYesterdayDate = () => {
@@ -45,6 +41,14 @@ export const PaymentHistoryDialog = ({
     transactionNotes: "",
     paidUntil: "", // Admin can set/extend paid until
   });
+
+  const handlePaymentMonthChange = (value) => {
+    setFormData((prev) => ({
+      ...prev,
+      paymentForMonth: value,
+      paidUntil: value ? getEndOfMonth(value) : "",
+    }));
+  };
 
   const refreshPaymentHistory = async () => {
     if (!member) return;
@@ -116,7 +120,7 @@ export const PaymentHistoryDialog = ({
     const { error } = await supabase.from("payment_history").insert({
       member_id: member.id,
       amount: Number(formData.amount),
-      payment_for_month: formData.paymentForMonth,
+      payment_for_month: getStartOfMonth(formData.paymentForMonth),
       payment_method: formData.paymentMethod,
       payment_type: formData.paymentType,
       transaction_notes: formData.transactionNotes || null,
@@ -325,12 +329,12 @@ export const PaymentHistoryDialog = ({
 
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700">
-                    Payment For Month <span className="text-red-500">*</span>
+                    Payment Month <span className="text-red-500">*</span>
                   </label>
                   <input
-                    type="date"
+                    type="month"
                     value={formData.paymentForMonth}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, paymentForMonth: e.target.value }))}
+                    onChange={(e) => handlePaymentMonthChange(e.target.value)}
                     required
                     className="w-full rounded-md border border-slate-300 p-2"
                   />
@@ -373,7 +377,9 @@ export const PaymentHistoryDialog = ({
                     onChange={(e) => setFormData((prev) => ({ ...prev, paidUntil: e.target.value }))}
                     className="w-full rounded-md border border-slate-300 p-2"
                   />
-                  <span className="text-xs text-slate-500">Set a new paid until date if extending membership.</span>
+                  <span className="text-xs text-slate-500">
+                    Defaults to the last day of the selected calendar month.
+                  </span>
                 </div>
               </div>
 

@@ -6,7 +6,7 @@ import { getSeatBaseFeeFromSettings } from "../seatmanagement/seatSettings";
 import { useToast } from "../../components/ui/toastContext";
 import { uploadMemberFile } from "./memberFiles";
 import { recordSeatHistory } from "./memberSeatHistory";
-import { getEndOfMonth } from "./memberUtils";
+import { getEndOfMonth, getStartOfMonth } from "./memberUtils";
 
 const LOCKER_FEE = 500;
 
@@ -27,6 +27,12 @@ const calculateSuggestedFee = (seatNumber, lockerTaken, registrationDate, seatBa
   return seatFee + lockerFee;
 };
 
+const getDayBefore = (dateValue) => {
+  const date = dateValue ? new Date(`${dateValue}T00:00:00`) : new Date();
+  date.setDate(date.getDate() - 1);
+  return date.toISOString().slice(0, 10);
+};
+
 const initialFormData = {
   fullName: "",
   dateOfBirth: "",
@@ -41,6 +47,7 @@ const initialFormData = {
   seatBaseFee: "",
   seatLockerAvailable: true,
   feeAmount: "",
+  paymentReceivedNow: true,
   paymentMethod: "Cash",
   transactionNotes: "",
 };
@@ -121,6 +128,11 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
       return;
     }
 
+    if (formData.paymentReceivedNow && formData.feeAmount !== "" && Number(formData.feeAmount) < 0) {
+      toast.warning("Invalid payment amount", { message: "Amount paid cannot be negative." });
+      return;
+    }
+
     setIsSubmitting(true);
     toast.info("Registering member", { message: "Uploading documents and saving the member record.", duration: 2500 });
 
@@ -137,6 +149,15 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
       return;
     }
 
+    const suggestedFeeAmount = calculateSuggestedFee(
+      formData.seatNumber,
+      formData.seatLockerAvailable && formData.lockerTaken,
+      formData.registrationDate,
+      formData.seatBaseFee,
+    );
+    const savedFeeAmount = Number(formData.feeAmount || suggestedFeeAmount || 0);
+    const paidUntil = formData.paymentReceivedNow ? getEndOfMonth(formData.registrationDate) : getDayBefore(formData.registrationDate);
+
     const { data, error } = await supabase
       .from("library_members")
       .insert({
@@ -151,10 +172,10 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
         locker_taken: formData.lockerTaken,
         seat_number: formData.seatNumber,
         seat_floor: formData.seatFloor,
-        fee_amount: Number(formData.feeAmount),
+        fee_amount: savedFeeAmount,
         payment_method: formData.paymentMethod,
         transaction_notes: formData.transactionNotes || null,
-        paid_until: getEndOfMonth(formData.registrationDate),
+        paid_until: paidUntil,
         id_document_path: idDocumentPath,
         passport_photo_path: passportPhotoPath,
       })
@@ -183,39 +204,30 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
       toast.warning("Member created, seat history not recorded", { message: seatHistoryError.message, duration: 7500 });
     }
 
-    const totalRegistrationAmount = Number(formData.feeAmount);
-    const lockerFeeAmount = formData.lockerTaken ? LOCKER_FEE : 0;
-    const monthlyFeeAmount = totalRegistrationAmount - lockerFeeAmount;
-
-    if (monthlyFeeAmount < 0) {
+    if (!formData.paymentReceivedNow) {
       setIsSubmitting(false);
-      toast.error("Invalid fee amount", { message: "Fee amount cannot be less than the locker fee." });
+      toast.success("Member registered", { message: "No payment was recorded. The member is marked as due." });
+      setFormData({ ...initialFormData });
+      setIdDocumentFile(null);
+      setPassportPhotoFile(null);
+      setFormVersion((version) => version + 1);
+      onMemberCreated();
       return;
     }
 
+    const totalRegistrationAmount = Number(formData.feeAmount || 0);
     const paymentRecords = [
       {
         member_id: data.id,
-        amount: monthlyFeeAmount,
-        payment_for_month: formData.registrationDate,
+        amount: totalRegistrationAmount,
+        payment_for_month: getStartOfMonth(formData.registrationDate),
         payment_method: formData.paymentMethod,
-        payment_type: "Monthly Fee",
+        payment_type: "Registration Fee",
         transaction_notes: formData.transactionNotes
-          ? `Registration monthly fee: ${formData.transactionNotes}`
-          : "Registration monthly fee",
+          ? `Registration payment: ${formData.transactionNotes}`
+          : "Registration payment",
       },
     ];
-
-    if (formData.lockerTaken) {
-      paymentRecords.push({
-        member_id: data.id,
-        amount: lockerFeeAmount,
-        payment_for_month: formData.registrationDate,
-        payment_method: formData.paymentMethod,
-        payment_type: "Locker Fee",
-        transaction_notes: "Registration locker fee",
-      });
-    }
 
     const { error: paymentError } = await supabase.from("payment_history").insert(paymentRecords);
 
@@ -375,19 +387,47 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
             </div>
           )}
 
+          <label className="flex items-start gap-3 rounded-md border border-blue-100 bg-blue-50 p-3 text-sm text-blue-900">
+            <input
+              type="checkbox"
+              name="paymentReceivedNow"
+              checked={formData.paymentReceivedNow}
+              onChange={handleChange}
+              className="mt-0.5 h-4 w-4"
+            />
+            <span>
+              <span className="block font-semibold">Payment received during registration</span>
+              <span className="text-blue-700">
+                Turn this off to register the member now and collect the fee later from Payment History.
+              </span>
+            </span>
+          </label>
+
+          {!formData.paymentReceivedNow && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-800">
+              No payment record will be created. This member will appear as payment due until a payment is added later.
+            </div>
+          )}
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-1">Fee Amount (Rs.)</label>
+              <label className="block text-sm font-bold text-gray-700 mb-1">
+                {formData.paymentReceivedNow ? "Amount Paid Now (Rs.)" : "Expected Fee (Rs.)"}
+              </label>
               <input
                 type="number"
                 name="feeAmount"
                 value={formData.feeAmount}
                 onChange={handleChange}
-                required
+                required={formData.paymentReceivedNow}
                 min="0"
-                className="w-full border rounded-md p-2 border-green-200 bg-green-50 focus:ring-green-500"
+                disabled={!formData.paymentReceivedNow}
+                className="w-full border rounded-md p-2 border-green-200 bg-green-50 focus:ring-green-500 disabled:cursor-not-allowed disabled:opacity-70"
                 placeholder="0.00"
               />
+              {!formData.paymentReceivedNow && (
+                <p className="mt-1 text-xs text-slate-500">Saved for reference only; no payment history will be added.</p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Payment via</label>
@@ -395,7 +435,8 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
                 name="paymentMethod"
                 value={formData.paymentMethod}
                 onChange={handleChange}
-                className="w-full border rounded-md p-2 bg-white"
+                disabled={!formData.paymentReceivedNow}
+                className="w-full border rounded-md p-2 bg-white disabled:cursor-not-allowed disabled:opacity-70"
               >
                 <option>Cash</option>
                 <option>Online</option>
@@ -477,7 +518,11 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
           className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-green-600 py-3 font-bold text-white transition duration-200 hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-green-400"
         >
           {isSubmitting && <LoaderCircle size={18} className="animate-spin" />}
-          {isSubmitting ? "Registering member..." : "Submit Registration"}
+          {isSubmitting
+            ? "Registering member..."
+            : formData.paymentReceivedNow
+              ? "Submit Registration"
+              : "Register Without Payment"}
         </button>
       </form>
     </div>

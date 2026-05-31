@@ -1,6 +1,33 @@
+const formatLocalDate = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const getDateFromMonthOrDate = (value) => {
+  if (!value) return new Date();
+
+  if (/^\d{4}-\d{2}$/.test(value)) {
+    return new Date(`${value}-01T00:00:00`);
+  }
+
+  return new Date(`${value}T00:00:00`);
+};
+
+export const getStartOfMonth = (dateValue) => {
+  const date = getDateFromMonthOrDate(dateValue);
+  return formatLocalDate(new Date(date.getFullYear(), date.getMonth(), 1));
+};
+
 export const getEndOfMonth = (dateValue) => {
+  const date = getDateFromMonthOrDate(dateValue);
+  return formatLocalDate(new Date(date.getFullYear(), date.getMonth() + 1, 0));
+};
+
+export const getMonthInputValue = (dateValue) => {
   const date = dateValue ? new Date(`${dateValue}T00:00:00`) : new Date();
-  return new Date(date.getFullYear(), date.getMonth() + 1, 0).toISOString().slice(0, 10);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 };
 
 export const getPaymentStatus = (paidUntilValue) => {

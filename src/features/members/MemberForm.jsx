@@ -1,14 +1,26 @@
 import React, { useMemo, useState } from "react";
-import { Camera, FolderOpen, LoaderCircle } from "lucide-react";
+import { Camera, CreditCard, FileImage, FolderOpen, Grid2X2, LoaderCircle, User } from "lucide-react";
 import supabase from "../../../helpers/supabase";
 import { SeatManagement } from "../seatmanagement/SeatManagement";
 import { getSeatBaseFeeFromSettings } from "../seatmanagement/seatSettings";
 import { useToast } from "../../components/ui/toastContext";
 import { uploadMemberFile } from "./memberFiles";
 import { recordSeatHistory } from "./memberSeatHistory";
-import { getEndOfMonth, getStartOfMonth } from "./memberUtils";
+import { getEndOfMonth, getMonthInputValue, getStartOfMonth } from "./memberUtils";
 
 const LOCKER_FEE = 500;
+const inputClass = "w-full rounded-md border border-slate-200 bg-slate-50 p-2.5 text-sm outline-blue-500 transition focus:border-blue-300 focus:bg-white";
+const labelClass = "mb-1.5 block text-sm font-semibold text-slate-700";
+
+const SectionHeader = ({ icon, title, description }) => (
+  <div className="mb-4 flex items-start gap-3">
+    <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-blue-50 text-blue-700">{icon}</div>
+    <div>
+      <h3 className="font-bold text-slate-950">{title}</h3>
+      <p className="text-sm text-slate-500">{description}</p>
+    </div>
+  </div>
+);
 
 const isAfterMidMonth = (dateValue) => {
   if (!dateValue) return false;
@@ -17,11 +29,19 @@ const isAfterMidMonth = (dateValue) => {
   return date.getDate() > 15;
 };
 
-const calculateSuggestedFee = (seatNumber, lockerTaken, registrationDate, seatBaseFee) => {
+const getMembershipFeeDate = (registrationDate, membershipMonth) => {
+  if (!membershipMonth) return registrationDate;
+
+  const registrationMonth = registrationDate ? getMonthInputValue(registrationDate) : "";
+  return registrationMonth === membershipMonth ? registrationDate : getStartOfMonth(membershipMonth);
+};
+
+const calculateSuggestedFee = (seatNumber, lockerTaken, registrationDate, seatBaseFee, membershipMonth) => {
   if (!seatNumber) return "";
 
   const baseFee = Number(seatBaseFee) || getSeatBaseFeeFromSettings(seatNumber);
-  const seatFee = isAfterMidMonth(registrationDate) ? baseFee / 2 : baseFee;
+  const feeDate = getMembershipFeeDate(registrationDate, membershipMonth);
+  const seatFee = isAfterMidMonth(feeDate) ? baseFee / 2 : baseFee;
   const lockerFee = lockerTaken ? LOCKER_FEE : 0;
 
   return seatFee + lockerFee;
@@ -30,7 +50,10 @@ const calculateSuggestedFee = (seatNumber, lockerTaken, registrationDate, seatBa
 const getDayBefore = (dateValue) => {
   const date = dateValue ? new Date(`${dateValue}T00:00:00`) : new Date();
   date.setDate(date.getDate() - 1);
-  return date.toISOString().slice(0, 10);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 };
 
 const initialFormData = {
@@ -41,6 +64,7 @@ const initialFormData = {
   idType: "Aadhar",
   idNumber: "",
   registrationDate: "",
+  membershipMonth: "",
   lockerTaken: false,
   seatNumber: "",
   seatFloor: "",
@@ -68,7 +92,8 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
     }
 
     const baseFee = Number(formData.seatBaseFee) || getSeatBaseFeeFromSettings(formData.seatNumber);
-    const midMonthDiscount = isAfterMidMonth(formData.registrationDate);
+    const feeDate = getMembershipFeeDate(formData.registrationDate, formData.membershipMonth);
+    const midMonthDiscount = isAfterMidMonth(feeDate);
     const seatFee = midMonthDiscount ? baseFee / 2 : baseFee;
     const lockerFee = formData.seatLockerAvailable && formData.lockerTaken ? LOCKER_FEE : 0;
 
@@ -78,11 +103,24 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
       lockerFee,
       midMonthDiscount,
     };
-  }, [formData.lockerTaken, formData.registrationDate, formData.seatBaseFee, formData.seatLockerAvailable, formData.seatNumber]);
+  }, [
+    formData.lockerTaken,
+    formData.membershipMonth,
+    formData.registrationDate,
+    formData.seatBaseFee,
+    formData.seatLockerAvailable,
+    formData.seatNumber,
+  ]);
 
   const withSuggestedFee = (data) => ({
     ...data,
-    feeAmount: calculateSuggestedFee(data.seatNumber, data.seatLockerAvailable && data.lockerTaken, data.registrationDate, data.seatBaseFee),
+    feeAmount: calculateSuggestedFee(
+      data.seatNumber,
+      data.seatLockerAvailable && data.lockerTaken,
+      data.registrationDate,
+      data.seatBaseFee,
+      data.membershipMonth,
+    ),
   });
 
   const handleSeatPick = ({ seatNumber, floor, baseFee, lockerAvailable = true }) => {
@@ -107,7 +145,11 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
         [name]: type === "checkbox" ? checked : value,
       };
 
-      if (name === "lockerTaken" || name === "registrationDate") {
+      if (name === "registrationDate" && !prev.membershipMonth) {
+        next.membershipMonth = value ? getMonthInputValue(value) : "";
+      }
+
+      if (name === "lockerTaken" || name === "registrationDate" || name === "membershipMonth") {
         return withSuggestedFee(next);
       }
 
@@ -154,9 +196,12 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
       formData.seatLockerAvailable && formData.lockerTaken,
       formData.registrationDate,
       formData.seatBaseFee,
+      formData.membershipMonth,
     );
     const savedFeeAmount = Number(formData.feeAmount || suggestedFeeAmount || 0);
-    const paidUntil = formData.paymentReceivedNow ? getEndOfMonth(formData.registrationDate) : getDayBefore(formData.registrationDate);
+    const membershipMonth = formData.membershipMonth || getMonthInputValue(formData.registrationDate);
+    const membershipMonthStart = getStartOfMonth(membershipMonth);
+    const paidUntil = formData.paymentReceivedNow ? getEndOfMonth(membershipMonth) : getDayBefore(formData.registrationDate);
 
     const { data, error } = await supabase
       .from("library_members")
@@ -220,7 +265,7 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
       {
         member_id: data.id,
         amount: totalRegistrationAmount,
-        payment_for_month: getStartOfMonth(formData.registrationDate),
+        payment_for_month: membershipMonthStart,
         payment_method: formData.paymentMethod,
         payment_type: "Registration Fee",
         transaction_notes: formData.transactionNotes
@@ -251,114 +296,112 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
 
   return (
     <div className="mx-auto max-w-3xl bg-white p-0 sm:p-2">
-      <form className="space-y-4" onSubmit={handleSubmit}>
-        {/* Full Name */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-          <input
-            type="text"
-            name="fullName"
-            value={formData.fullName}
-            onChange={handleChange}
-            required
-            className="w-full border rounded-md p-2 outline-blue-500"
-            placeholder="Enter full name"
+      <form className="space-y-5" onSubmit={handleSubmit}>
+        <section className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
+          <SectionHeader
+            icon={<User size={18} />}
+            title="Personal Details"
+            description="Basic member information and identity details."
           />
-        </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className={labelClass}>Full Name</label>
+              <input
+                type="text"
+                name="fullName"
+                value={formData.fullName}
+                onChange={handleChange}
+                required
+                className={inputClass}
+                placeholder="Enter full name"
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Phone Number</label>
+              <input
+                type="text"
+                name="phoneNumber"
+                value={formData.phoneNumber}
+                onChange={handleChange}
+                required
+                className={inputClass}
+                placeholder="Enter phone number"
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Registered Email</label>
+              <input
+                type="email"
+                name="registeredEmail"
+                value={formData.registeredEmail}
+                onChange={handleChange}
+                className={inputClass}
+                placeholder="member@example.com"
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Date of Birth</label>
+              <input type="date" name="dateOfBirth" value={formData.dateOfBirth} onChange={handleChange} className={inputClass} />
+            </div>
+            <div>
+              <label className={labelClass}>ID Type</label>
+              <select name="idType" value={formData.idType} onChange={handleChange} className={inputClass}>
+                <option>Aadhar</option>
+                <option>PAN</option>
+                <option>Passport</option>
+              </select>
+            </div>
+            <div className="sm:col-span-2">
+              <label className={labelClass}>ID Number</label>
+              <input
+                type="text"
+                name="idNumber"
+                value={formData.idNumber}
+                onChange={handleChange}
+                required
+                className={inputClass}
+                placeholder="Enter ID number"
+              />
+            </div>
+          </div>
+        </section>
 
-        {/* Personal Details */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
-            <input
-              type="date"
-              name="dateOfBirth"
-              value={formData.dateOfBirth}
-              onChange={handleChange}
-              className="w-full border rounded-md p-2"
-            />
+        <section className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
+          <SectionHeader
+            icon={<Grid2X2 size={18} />}
+            title="Seat & Membership"
+            description="Choose the seat, locker option, and calendar month."
+          />
+          <div className="mb-4 grid grid-cols-1 items-start gap-4 sm:grid-cols-2">
+            <div>
+              <label className={labelClass}>Registration Date</label>
+              <input
+                type="date"
+                name="registrationDate"
+                value={formData.registrationDate}
+                onChange={handleChange}
+                required
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Membership Month</label>
+              <input
+                type="month"
+                name="membershipMonth"
+                value={formData.membershipMonth}
+                onChange={handleChange}
+                required
+                className={inputClass}
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Paid until will be {formData.membershipMonth ? getEndOfMonth(formData.membershipMonth) : "the last day of this month"}.
+              </p>
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-            <input
-              type="text"
-              name="phoneNumber"
-              value={formData.phoneNumber}
-              onChange={handleChange}
-              required
-              className="w-full border rounded-md p-2 outline-blue-500"
-              placeholder="Enter phone number"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Registered Email</label>
-            <input
-              type="email"
-              name="registeredEmail"
-              value={formData.registeredEmail}
-              onChange={handleChange}
-              className="w-full border rounded-md p-2 outline-blue-500"
-              placeholder="member@example.com"
-            />
-          </div>
-        </div>
 
-        {/* ID Details */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">ID Type</label>
-            <select name="idType" value={formData.idType} onChange={handleChange} className="w-full border rounded-md p-2 bg-white">
-              <option>Aadhar</option>
-              <option>PAN</option>
-              <option>Passport</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">ID Number</label>
-            <input
-              type="text"
-              name="idNumber"
-              value={formData.idNumber}
-              onChange={handleChange}
-              required
-              className="w-full border rounded-md p-2 outline-blue-500"
-              placeholder="Number"
-            />
-          </div>
-        </div>
-
-        {/* Date and Locker */}
-        <div className="grid grid-cols-1 items-end gap-4 sm:grid-cols-2">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Registration Date</label>
-            <input
-              type="date"
-              name="registrationDate"
-              value={formData.registrationDate}
-              onChange={handleChange}
-              required
-              className="w-full border rounded-md p-2"
-            />
-          </div>
-          <div className="flex items-center pb-3">
-            <input
-              checked={formData.lockerTaken}
-              onChange={handleChange}
-              type="checkbox"
-              name="lockerTaken"
-              id="locker"
-              disabled={!formData.seatLockerAvailable}
-              className="h-4 w-4 text-blue-600 rounded"
-            />
-            <label htmlFor="locker" className="ml-2 text-sm text-gray-700">
-              {formData.seatLockerAvailable ? "Locker Taken" : "Locker not available for this seat"}
-            </label>
-          </div>
-        </div>
-
-        <div className="pt-4 border-t mt-4 space-y-3">
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">Select Seat</label>
+          <div className="space-y-3">
+            <label className={labelClass}>Select Seat</label>
             <SeatManagement
               key={formVersion}
               onSeatSelect={handleSeatPick}
@@ -367,17 +410,40 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
               occupiedMembers={occupiedMembers}
               allowConfiguration={false}
             />
-          </div>
 
-          {formData.seatNumber && (
-            <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-900">
-              Seat {formData.seatNumber} selected on {formData.seatFloor} floor.
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+              {formData.seatNumber ? (
+                <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+                  Seat {formData.seatNumber} selected on {formData.seatFloor} floor.
+                </div>
+              ) : (
+                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">
+                  Select an available seat to continue.
+                </div>
+              )}
+              <label className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
+                <input
+                  checked={formData.lockerTaken}
+                  onChange={handleChange}
+                  type="checkbox"
+                  name="lockerTaken"
+                  id="locker"
+                  disabled={!formData.seatLockerAvailable}
+                  className="h-4 w-4 rounded text-blue-600"
+                />
+                {formData.seatLockerAvailable ? "Locker Taken" : "Locker not available"}
+              </label>
             </div>
-          )}
-        </div>
+          </div>
+        </section>
 
-        {/* Billing Section */}
-        <div className="pt-4 border-t mt-4 space-y-4">
+        <section className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
+          <SectionHeader
+            icon={<CreditCard size={18} />}
+            title="Payment Details"
+            description="Record payment now or register first and collect later."
+          />
+          <div className="space-y-4">
           {feeBreakdown && (
             <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
               {feeBreakdown.baseFee === 0 && <div className="font-semibold text-emerald-700">Zero-fee seat selected: total payable can be Rs.0.</div>}
@@ -411,7 +477,7 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-1">
+              <label className={labelClass}>
                 {formData.paymentReceivedNow ? "Amount Paid Now (Rs.)" : "Expected Fee (Rs.)"}
               </label>
               <input
@@ -422,7 +488,7 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
                 required={formData.paymentReceivedNow}
                 min="0"
                 disabled={!formData.paymentReceivedNow}
-                className="w-full border rounded-md p-2 border-green-200 bg-green-50 focus:ring-green-500 disabled:cursor-not-allowed disabled:opacity-70"
+                className={`${inputClass} border-green-200 bg-green-50 disabled:cursor-not-allowed disabled:opacity-70`}
                 placeholder="0.00"
               />
               {!formData.paymentReceivedNow && (
@@ -430,13 +496,13 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
               )}
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Payment via</label>
+              <label className={labelClass}>Payment via</label>
               <select
                 name="paymentMethod"
                 value={formData.paymentMethod}
                 onChange={handleChange}
                 disabled={!formData.paymentReceivedNow}
-                className="w-full border rounded-md p-2 bg-white disabled:cursor-not-allowed disabled:opacity-70"
+                className={`${inputClass} disabled:cursor-not-allowed disabled:opacity-70`}
               >
                 <option>Cash</option>
                 <option>Online</option>
@@ -444,21 +510,28 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Transaction Notes</label>
+            <label className={labelClass}>Transaction Notes</label>
             <input
               type="text"
               name="transactionNotes"
               value={formData.transactionNotes}
               onChange={handleChange}
-              className="w-full border rounded-md p-2 outline-blue-500"
+              className={inputClass}
               placeholder="Enter transaction notes"
             />
           </div>
-        </div>
+          </div>
+        </section>
 
-        <div className="pt-4 border-t mt-4 space-y-4">
+        <section className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
+          <SectionHeader
+            icon={<FileImage size={18} />}
+            title="Documents"
+            description="Upload required ID proof and optional member photo."
+          />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-1">ID Document Photo</label>
+            <label className={labelClass}>ID Document Photo</label>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <label
                 htmlFor={`id-document-camera-${formVersion}`}
@@ -496,7 +569,7 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
             <p className="mt-1 text-xs text-red-700">Required for every new member registration. Use camera or choose an existing image.</p>
           </div>
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-1">Passport Size Photo</label>
+            <label className={labelClass}>Passport Size Photo</label>
             <input
               key={`passport-photo-${formVersion}`}
               type="file"
@@ -509,7 +582,8 @@ export const MemberForm = ({ occupiedSeats = [], occupiedMembers = [], onMemberC
               Optional. A fallback photo will be shown if this is not uploaded. Tap to use selfie camera on mobile/tablet.
             </p>
           </div>
-        </div>
+          </div>
+        </section>
 
         <button
           type="submit"

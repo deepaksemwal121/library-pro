@@ -175,8 +175,8 @@ export const MembersTable = ({
                             <button
                               type="button"
                               aria-label={`Reactivate ${member.fullName}`}
-                              title="Make active again"
-                              onClick={() => onReactivateMember(member.id)}
+                              title="Reactivate with new seat"
+                              onClick={() => setSelectedMember(member)}
                               className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-emerald-100 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
                             >
                               <UserCheck size={15} />

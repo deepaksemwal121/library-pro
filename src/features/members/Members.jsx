@@ -7,7 +7,7 @@ import { MemberForm } from "./MemberForm";
 import { MembersTable } from "./MembersTable";
 import { uploadMemberFile } from "./memberFiles";
 import { recordSeatHistory } from "./memberSeatHistory";
-import { mapMemberFromDb, getPaymentStatus } from "./memberUtils";
+import { getEndOfMonth, getPaymentStatus, getStartOfMonth, mapMemberFromDb } from "./memberUtils";
 import { exportMembersToExcel } from "./memberExport";
 
 const loadMembersByStatus = async (status) => {
@@ -22,6 +22,13 @@ const loadMembersByStatus = async (status) => {
   }
 
   return data.map(mapMemberFromDb);
+};
+
+const getYesterdayDate = () => {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() - 1);
+  return date.toISOString().slice(0, 10);
 };
 
 export const Members = () => {
@@ -194,7 +201,7 @@ export const Members = () => {
     return true;
   };
 
-  const handleReactivateMember = async (memberId) => {
+  const handleReactivateMember = async (memberId, reactivationData) => {
     setErrorMessage("");
 
     const member = leftMembers.find((item) => item.id === memberId);
@@ -204,10 +211,40 @@ export const Members = () => {
       return false;
     }
 
+    if (!reactivationData?.seatNumber || !reactivationData?.seatFloor) {
+      setErrorMessage("A new seat must be selected before reactivating this member.");
+      return false;
+    }
+
+    // Prevent reusing the old seat
+    if (String(reactivationData.seatNumber).trim() === String(member.seatNumber).trim()) {
+      setErrorMessage(`Cannot reuse seat ${member.seatNumber}. Please select a different available seat for this member.`);
+      return false;
+    }
+
+    if (!reactivationData?.membershipMonth) {
+      setErrorMessage("Membership month must be selected before reactivating this member.");
+      return false;
+    }
+
+    if (reactivationData.paymentReceivedNow && Number(reactivationData.feeAmount || 0) < 0) {
+      setErrorMessage("Monthly fee amount cannot be negative.");
+      return false;
+    }
+
+    const paidUntil = reactivationData.paymentReceivedNow ? getEndOfMonth(reactivationData.membershipMonth) : getYesterdayDate();
+
     const { error } = await supabase
       .from("library_members")
       .update({
         member_status: "active",
+        seat_number: reactivationData.seatNumber,
+        seat_floor: reactivationData.seatFloor,
+        locker_taken: Boolean(reactivationData.lockerTaken),
+        fee_amount: Number(reactivationData.feeAmount || member.feeAmount || 0),
+        payment_method: reactivationData.paymentMethod,
+        transaction_notes: reactivationData.transactionNotes || null,
+        paid_until: paidUntil,
         left_at: null,
         exit_notes: null,
         locker_security_refunded: false,
@@ -223,6 +260,40 @@ export const Members = () => {
 
       setErrorMessage(error.message);
       return false;
+    }
+
+    const { error: seatHistoryError } = await recordSeatHistory({
+      memberId,
+      fromSeatNumber: member.seatNumber,
+      fromSeatFloor: member.seatFloor,
+      toSeatNumber: reactivationData.seatNumber,
+      toSeatFloor: reactivationData.seatFloor,
+      reason: "Reactivated with new seat",
+    });
+
+    if (seatHistoryError) {
+      setErrorMessage(`Member reactivated, but seat history was not recorded: ${seatHistoryError.message}`);
+      await fetchMembers();
+      setMemberView("active");
+      return false;
+    }
+
+    if (reactivationData.paymentReceivedNow) {
+      const { error: paymentError } = await supabase.from("payment_history").insert({
+        member_id: memberId,
+        amount: Number(reactivationData.feeAmount || 0),
+        payment_for_month: getStartOfMonth(reactivationData.membershipMonth),
+        payment_method: reactivationData.paymentMethod,
+        payment_type: "Monthly Fee",
+        transaction_notes: reactivationData.transactionNotes || "Reactivation monthly fee",
+      });
+
+      if (paymentError) {
+        setErrorMessage(`Member reactivated, but monthly fee was not recorded: ${paymentError.message}`);
+        await fetchMembers();
+        setMemberView("active");
+        return false;
+      }
     }
 
     await fetchMembers();

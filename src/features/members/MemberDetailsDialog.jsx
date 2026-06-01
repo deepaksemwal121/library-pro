@@ -4,7 +4,9 @@ import { ArrowLeft, Camera, FileImage, FolderOpen, Pencil, UserCheck, X } from "
 import { SeatSelector } from "../seatmanagement/SeatSelector";
 import { getMemberFileSignedUrl } from "./memberFiles";
 import { loadMemberSeatHistory } from "./memberSeatHistory";
-import { EXIT_REASON_OPTIONS } from "./memberUtils";
+import { EXIT_REASON_OPTIONS, getEndOfMonth, getMonthInputValue } from "./memberUtils";
+
+const LOCKER_FEE = 500;
 
 const getEditableMemberData = (member) => ({
   fullName: member.fullName,
@@ -34,6 +36,19 @@ const getInitialLeftData = () => ({
   exitNotes: "",
 });
 
+const getInitialReactivateData = () => ({
+  seatNumber: "",
+  seatFloor: "",
+  seatBaseFee: 0,
+  seatLockerAvailable: true,
+  lockerTaken: false,
+  membershipMonth: getMonthInputValue(new Date().toISOString().slice(0, 10)),
+  paymentReceivedNow: false,
+  feeAmount: "",
+  paymentMethod: "Cash",
+  transactionNotes: "",
+});
+
 const formatDisplayDate = (dateValue) => {
   if (!dateValue) return "Not added";
 
@@ -56,6 +71,7 @@ export const MemberDetailsDialog = ({
 }) => {
   const [formData, setFormData] = useState(() => (member ? getEditableMemberData(member) : null));
   const [leftData, setLeftData] = useState(getInitialLeftData);
+  const [reactivateData, setReactivateData] = useState(getInitialReactivateData);
   const [notice, setNotice] = useState({ tone: "", message: "" });
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -154,6 +170,23 @@ export const MemberDetailsDialog = ({
     }));
   };
 
+  const handleReactivateChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setNotice({ tone: "", message: "" });
+    setReactivateData((prev) => {
+      const next = {
+        ...prev,
+        [name]: type === "checkbox" ? checked : value,
+      };
+
+      if (name === "lockerTaken") {
+        next.feeAmount = Number(prev.seatBaseFee || 0) + (checked && prev.seatLockerAvailable ? LOCKER_FEE : 0);
+      }
+
+      return next;
+    });
+  };
+
   const handleSeatPick = ({ seatNumber, floor, lockerAvailable = true }) => {
     setNotice({ tone: "warning", message: "Seat changed. Save changes to update this member's allotted seat." });
     setFormData((prev) => ({
@@ -165,9 +198,23 @@ export const MemberDetailsDialog = ({
     }));
   };
 
+  const handleReactivateSeatPick = ({ seatNumber, floor, baseFee = 0, lockerAvailable = true }) => {
+    setNotice({ tone: "", message: "" });
+    setReactivateData((prev) => ({
+      ...prev,
+      seatNumber,
+      seatFloor: floor,
+      seatBaseFee: Number(baseFee) || 0,
+      seatLockerAvailable: lockerAvailable,
+      lockerTaken: lockerAvailable ? prev.lockerTaken : false,
+      feeAmount: Number(baseFee || 0) + (lockerAvailable && prev.lockerTaken ? LOCKER_FEE : 0),
+    }));
+  };
+
   const handleStartEditing = () => {
     setFormData(getEditableMemberData(member));
     setLeftData(getInitialLeftData());
+    setReactivateData(getInitialReactivateData());
     setNotice({ tone: "", message: "" });
     setIdDocumentFile(null);
     setPassportPhotoFile(null);
@@ -187,6 +234,7 @@ export const MemberDetailsDialog = ({
     if (!isOpen) {
       setFormData(getEditableMemberData(member));
       setLeftData(getInitialLeftData());
+      setReactivateData(getInitialReactivateData());
       setNotice({ tone: "", message: "" });
       setIdDocumentFile(null);
       setPassportPhotoFile(null);
@@ -251,14 +299,40 @@ export const MemberDetailsDialog = ({
   };
 
   const handleReactivate = async () => {
+    if (!reactivateData.seatNumber || !reactivateData.seatFloor) {
+      setNotice({ tone: "error", message: "⚠️ Step 1 Required: Please select a new available seat before reactivating." });
+      return;
+    }
+
+    if (String(reactivateData.seatNumber).trim() === String(member.seatNumber).trim()) {
+      setNotice({ tone: "error", message: "❌ Cannot reuse the old seat. Please select a different available seat." });
+      return;
+    }
+
+    if (!reactivateData.membershipMonth) {
+      setNotice({ tone: "error", message: "⚠️ Step 2 Required: Please select the membership month." });
+      return;
+    }
+
+    if (reactivateData.feeAmount === "") {
+      setNotice({ tone: "error", message: "⚠️ Step 2 Required: Please enter the monthly fee amount." });
+      return;
+    }
+
+    if (Number(reactivateData.feeAmount || 0) < 0) {
+      setNotice({ tone: "error", message: "Invalid fee amount: Monthly fee cannot be negative." });
+      return;
+    }
+
     setIsReactivating(true);
-    const didReactivate = await onReactivate(member.id);
+    const didReactivate = await onReactivate(member.id, reactivateData);
     setIsReactivating(false);
 
     if (!didReactivate) {
       setNotice({
         tone: "error",
-        message: "Could not reactivate this member. If their old seat is occupied, edit the member and choose an available seat first.",
+        message:
+          "Could not complete reactivation. The selected seat may have just been assigned to another member. Please select a different available seat.",
       });
     }
   };
@@ -445,6 +519,133 @@ export const MemberDetailsDialog = ({
                 </div>
               </div>
 
+              {isLeftMember && (
+                <div className="rounded-md border border-emerald-200 bg-emerald-50/60 p-4">
+                  <h3 className="font-bold text-slate-900">Step 1: Assign New Seat</h3>
+                  <p className="mt-1 text-sm text-slate-600">
+                    This member previously occupied seat{" "}
+                    <strong>
+                      {member.seatNumber} ({member.seatFloor} floor)
+                    </strong>
+                    . Please select a <strong>different available seat</strong> to continue their membership. The old seat cannot be reused.
+                  </p>
+
+                  <div className="mt-4">
+                    <label className="mb-2 block text-sm font-bold text-slate-700">Select New Available Seat *</label>
+                    <SeatSelector
+                      currentSeatNumber={null}
+                      currentFloor={null}
+                      excludeSeat={member.seatNumber}
+                      onSeatSelect={handleReactivateSeatPick}
+                      isLockerChecked={reactivateData.lockerTaken}
+                      occupiedSeats={occupiedSeats}
+                      occupiedMembers={occupiedMembers}
+                    />
+                    {reactivateData.seatNumber ? (
+                      <div className="mt-2 rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm text-emerald-800">
+                        ✓ New seat assigned: <strong>{reactivateData.seatNumber}</strong> on{" "}
+                        <strong>{reactivateData.seatFloor} floor</strong>.
+                      </div>
+                    ) : (
+                      <div className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                        ⚠️ A new seat selection is required to reactivate this member.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-6">
+                    <h3 className="font-bold text-slate-900">Step 2: Update Payment Details</h3>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Record the membership month and payment information to continue this member's membership.
+                    </p>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <label className="flex items-center gap-2 rounded-md border border-slate-200 bg-white p-3 text-sm text-slate-700">
+                      <input
+                        type="checkbox"
+                        name="lockerTaken"
+                        checked={reactivateData.lockerTaken}
+                        onChange={handleReactivateChange}
+                        disabled={!reactivateData.seatLockerAvailable}
+                        className="h-4 w-4"
+                      />
+                      {reactivateData.seatLockerAvailable ? "Locker Taken" : "Locker not available for this seat"}
+                    </label>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Membership Month *</label>
+                      <input
+                        type="month"
+                        name="membershipMonth"
+                        value={reactivateData.membershipMonth}
+                        onChange={handleReactivateChange}
+                        className="w-full rounded-md border border-slate-200 bg-white p-2 outline-blue-500"
+                      />
+                      <p className="mt-1 text-xs text-slate-500">
+                        Paid until:{" "}
+                        <strong>{reactivateData.membershipMonth ? getEndOfMonth(reactivateData.membershipMonth) : "Select a month"}</strong>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 rounded-md border-2 border-blue-300 bg-blue-50 p-4">
+                    <label className="flex items-start gap-3 text-sm text-slate-800">
+                      <input
+                        type="checkbox"
+                        name="paymentReceivedNow"
+                        checked={reactivateData.paymentReceivedNow}
+                        onChange={handleReactivateChange}
+                        className="mt-0.5 h-4 w-4"
+                      />
+                      <span>
+                        <span className="block font-semibold">Payment Received</span>
+                        <span className="text-slate-500">
+                          Check this if the monthly fee has been received now. Leave unchecked to mark as due and track separately.
+                        </span>
+                      </span>
+                    </label>
+
+                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-slate-700">Monthly Fee Amount (Rs.) *</label>
+                        <input
+                          type="number"
+                          name="feeAmount"
+                          value={reactivateData.feeAmount}
+                          onChange={handleReactivateChange}
+                          min="0"
+                          className="w-full rounded-md border border-slate-200 bg-white p-2 outline-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-slate-700">Payment Method</label>
+                        <select
+                          name="paymentMethod"
+                          value={reactivateData.paymentMethod}
+                          onChange={handleReactivateChange}
+                          disabled={!reactivateData.paymentReceivedNow}
+                          className="w-full rounded-md border border-slate-200 bg-white p-2 outline-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
+                        >
+                          <option>Cash</option>
+                          <option>Online</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="mt-3">
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Follow-up Notes</label>
+                      <input
+                        name="transactionNotes"
+                        value={reactivateData.transactionNotes}
+                        onChange={handleReactivateChange}
+                        className="w-full rounded-md border border-slate-200 bg-slate-50 p-2 outline-blue-500"
+                        placeholder="Optional monthly fee note"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="flex flex-col justify-end gap-2 border-t pt-4 sm:flex-row">
                 <button
                   type="button"
@@ -458,7 +659,18 @@ export const MemberDetailsDialog = ({
                   <button
                     type="button"
                     onClick={handleReactivate}
-                    disabled={isReactivating}
+                    disabled={
+                      isReactivating || !reactivateData.seatNumber || !reactivateData.membershipMonth || reactivateData.feeAmount === ""
+                    }
+                    title={
+                      !reactivateData.seatNumber
+                        ? "Select a new seat"
+                        : !reactivateData.membershipMonth
+                          ? "Select membership month"
+                          : reactivateData.feeAmount === ""
+                            ? "Enter fee amount"
+                            : ""
+                    }
                     className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-300 sm:w-auto"
                   >
                     <UserCheck size={16} />
@@ -682,89 +894,89 @@ export const MemberDetailsDialog = ({
               </form>
 
               {!isLeftMember && (
-              <div className="mt-6 border-t pt-5">
-                <h3 className="font-bold text-slate-900">Member Leaving Library</h3>
-                <div className="mt-2 border border-red-100 bg-red-50 p-3 text-sm text-red-700">
-                  Marking this member left will remove them from the active members list and free their seat for new registration.
-                </div>
-                {formData.lockerTaken && (
-                  <div className="mt-2 border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
-                    This member has a locker. Confirm the refundable security has been collected and locker keys have been submitted.
+                <div className="mt-6 border-t pt-5">
+                  <h3 className="font-bold text-slate-900">Member Leaving Library</h3>
+                  <div className="mt-2 border border-red-100 bg-red-50 p-3 text-sm text-red-700">
+                    Marking this member left will remove them from the active members list and free their seat for new registration.
                   </div>
-                )}
-                <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">Leaving Date</label>
-                    <input
-                      type="date"
-                      name="leftAt"
-                      value={leftData.leftAt}
-                      onChange={handleLeftChange}
-                      className="w-full rounded-md border p-2"
-                    />
-                  </div>
-                  <div className="flex flex-col justify-end gap-2">
-                    <label className="flex items-center gap-2 text-sm text-slate-700">
+                  {formData.lockerTaken && (
+                    <div className="mt-2 border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
+                      This member has a locker. Confirm the refundable security has been collected and locker keys have been submitted.
+                    </div>
+                  )}
+                  <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Leaving Date</label>
                       <input
-                        type="checkbox"
-                        name="lockerSecurityRefunded"
-                        checked={leftData.lockerSecurityRefunded}
+                        type="date"
+                        name="leftAt"
+                        value={leftData.leftAt}
                         onChange={handleLeftChange}
-                        disabled={!formData.lockerTaken}
-                        className="h-4 w-4"
+                        className="w-full rounded-md border p-2"
                       />
-                      Locker security refunded
-                    </label>
-                    <label className="flex items-center gap-2 text-sm text-slate-700">
+                    </div>
+                    <div className="flex flex-col justify-end gap-2">
+                      <label className="flex items-center gap-2 text-sm text-slate-700">
+                        <input
+                          type="checkbox"
+                          name="lockerSecurityRefunded"
+                          checked={leftData.lockerSecurityRefunded}
+                          onChange={handleLeftChange}
+                          disabled={!formData.lockerTaken}
+                          className="h-4 w-4"
+                        />
+                        Locker security refunded
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-slate-700">
+                        <input
+                          type="checkbox"
+                          name="lockerKeysReturned"
+                          checked={leftData.lockerKeysReturned}
+                          onChange={handleLeftChange}
+                          disabled={!formData.lockerTaken}
+                          className="h-4 w-4"
+                        />
+                        Locker keys submitted
+                      </label>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Leaving Reason</label>
+                      <select
+                        name="exitReason"
+                        value={leftData.exitReason}
+                        onChange={handleLeftChange}
+                        className="w-full rounded-md border bg-white p-2 outline-blue-500"
+                      >
+                        <option value="">Select reason</option>
+                        {EXIT_REASON_OPTIONS.map((reason) => (
+                          <option key={reason} value={reason}>
+                            {reason}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Custom Reason</label>
                       <input
-                        type="checkbox"
-                        name="lockerKeysReturned"
-                        checked={leftData.lockerKeysReturned}
+                        name="exitNotes"
+                        value={leftData.exitNotes}
                         onChange={handleLeftChange}
-                        disabled={!formData.lockerTaken}
-                        className="h-4 w-4"
+                        className="w-full rounded-md border p-2 outline-blue-500"
+                        placeholder="Write a specific reason"
                       />
-                      Locker keys submitted
-                    </label>
+                    </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={handleMarkLeft}
+                    disabled={isSaving || isMarkingLeft || !canSubmitExit}
+                    className="mt-3 w-full rounded-md bg-red-600 px-4 py-2 font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300 sm:w-auto"
+                  >
+                    {isMarkingLeft ? "Removing..." : "Mark Member Left"}
+                  </button>
                 </div>
-                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">Leaving Reason</label>
-                    <select
-                      name="exitReason"
-                      value={leftData.exitReason}
-                      onChange={handleLeftChange}
-                      className="w-full rounded-md border bg-white p-2 outline-blue-500"
-                    >
-                      <option value="">Select reason</option>
-                      {EXIT_REASON_OPTIONS.map((reason) => (
-                        <option key={reason} value={reason}>
-                          {reason}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">Custom Reason</label>
-                    <input
-                      name="exitNotes"
-                      value={leftData.exitNotes}
-                      onChange={handleLeftChange}
-                      className="w-full rounded-md border p-2 outline-blue-500"
-                      placeholder="Write a specific reason"
-                    />
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleMarkLeft}
-                  disabled={isSaving || isMarkingLeft || !canSubmitExit}
-                  className="mt-3 w-full rounded-md bg-red-600 px-4 py-2 font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300 sm:w-auto"
-                >
-                  {isMarkingLeft ? "Removing..." : "Mark Member Left"}
-                </button>
-              </div>
               )}
             </>
           )}

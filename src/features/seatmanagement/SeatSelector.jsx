@@ -8,6 +8,7 @@ export const SeatSelector = ({
   currentFloor = null,
   occupiedMembers = null,
   occupiedSeats = null,
+  excludeSeat = null,
   onSeatSelect = () => {},
 }) => {
   const floors = useMemo(() => loadSeatFloors(), []);
@@ -25,10 +26,14 @@ export const SeatSelector = ({
   const hasProvidedSeatData = Boolean(occupiedMembers || occupiedSeats);
   const memberDetails = occupiedMembers ?? dbOccupiedMembers;
   const memberBySeat = useMemo(() => new Map(memberDetails.map((member) => [normalizeSeatId(member.seatNumber), member])), [memberDetails]);
-  const occupiedSeatSet = useMemo(
-    () => new Set((occupiedSeats ?? memberDetails.map((member) => member.seatNumber)).map(normalizeSeatId)),
-    [memberDetails, occupiedSeats],
-  );
+  const occupiedSeatSet = useMemo(() => {
+    const occupied = new Set((occupiedSeats ?? memberDetails.map((member) => member.seatNumber)).map(normalizeSeatId));
+    // Add excluded seat (for reactivation, exclude the old seat)
+    if (excludeSeat) {
+      occupied.add(normalizeSeatId(excludeSeat));
+    }
+    return occupied;
+  }, [memberDetails, occupiedSeats, excludeSeat]);
   const hoveredMember = hoveredSeat ? memberBySeat.get(hoveredSeat) : null;
   const occupiedOnFloor = activeSeats.filter((seat) => occupiedSeatSet.has(seat)).length;
   const availableOnFloor = activeSeats.length - occupiedOnFloor;

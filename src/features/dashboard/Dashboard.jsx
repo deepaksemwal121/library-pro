@@ -207,7 +207,13 @@ const Dashboard = () => {
 
     payments.forEach((payment) => {
       const key = monthKey(payment.transaction_date || payment.created_at);
-      const current = grouped.get(key) || { month: key, sortDate: payment.transaction_date || payment.created_at, revenue: 0, members: 0, expense: 0 };
+      const current = grouped.get(key) || {
+        month: key,
+        sortDate: payment.transaction_date || payment.created_at,
+        revenue: 0,
+        members: 0,
+        expense: 0,
+      };
       grouped.set(key, {
         ...current,
         revenue: current.revenue + Number(payment.amount || 0),
@@ -269,11 +275,11 @@ const Dashboard = () => {
 
       row.payments += 1;
 
-      if (type === "Locker Security") {
-        row.securityDeposit += amount;
-      }
+      // if (type === "Locker Security") {
+      //   row.securityDeposit += amount;
+      // }
 
-      if (type === "Locker Fee") {
+      if (type === "Locker Security") {
         row.lockerFee += amount;
       }
 
@@ -310,9 +316,7 @@ const Dashboard = () => {
       }
     }
 
-    return rows
-      .map((row) => ({ ...row, net: row.revenue - row.expenditure }))
-      .sort((first, second) => second.id.localeCompare(first.id));
+    return rows.map((row) => ({ ...row, net: row.revenue - row.expenditure })).sort((first, second) => second.id.localeCompare(first.id));
   }, [expenses, payments]);
 
   const visibleFinanceRows = useMemo(() => {
@@ -430,7 +434,7 @@ const Dashboard = () => {
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <KpiCard
             title="Monthly Revenue"
             value={currency.format(metrics.monthlyRevenue)}
@@ -445,15 +449,15 @@ const Dashboard = () => {
             icon={<BarChart3 size={20} />}
             tone="amber"
           />
-          <KpiCard
+          {/* <KpiCard
             title="Security Deposit"
             value={currency.format(metrics.securityDeposit)}
             helper="Locker security collected this month"
             icon={<ShieldCheck size={20} />}
             tone="slate"
-          />
+          /> */}
           <KpiCard
-            title="Locker Fee"
+            title="Locker Security Fee"
             value={currency.format(metrics.lockerFee)}
             helper="Locker fee payments this month"
             icon={<Lock size={20} />}
@@ -467,7 +471,9 @@ const Dashboard = () => {
           <div>
             <h3 className="text-lg font-semibold text-slate-900">Monthly Finance History</h3>
             <p className="text-sm text-slate-500">
-              {selectedFinanceMonth ? "Selected month totals from recorded payments and expenses." : "Latest 3 months from recorded payments and expenses."}
+              {selectedFinanceMonth
+                ? "Selected month totals from recorded payments and expenses."
+                : "Latest 3 months from recorded payments and expenses."}
             </p>
           </div>
           <select
@@ -491,8 +497,8 @@ const Dashboard = () => {
                 <th className="px-3 py-3">Month</th>
                 <th className="px-3 py-3 text-right">Revenue</th>
                 <th className="px-3 py-3 text-right">Expenditure</th>
-                <th className="px-3 py-3 text-right">Security Deposit</th>
-                <th className="px-3 py-3 text-right">Locker Fee</th>
+                {/* <th className="px-3 py-3 text-right">Security Deposit</th> */}
+                <th className="px-3 py-3 text-right">Locker Security Fee</th>
                 <th className="px-3 py-3 text-right">Net</th>
               </tr>
             </thead>
@@ -515,7 +521,7 @@ const Dashboard = () => {
                   </td>
                   <td className="px-3 py-3 text-right font-semibold text-slate-900">{currency.format(row.revenue)}</td>
                   <td className="px-3 py-3 text-right text-slate-700">{currency.format(row.expenditure)}</td>
-                  <td className="px-3 py-3 text-right text-slate-700">{currency.format(row.securityDeposit)}</td>
+                  {/* <td className="px-3 py-3 text-right text-slate-700">{currency.format(row.securityDeposit)}</td> */}
                   <td className="px-3 py-3 text-right text-slate-700">{currency.format(row.lockerFee)}</td>
                   <td className={`px-3 py-3 text-right font-semibold ${row.net >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
                     {currency.format(row.net)}

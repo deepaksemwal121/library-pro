@@ -149,7 +149,7 @@ const Dashboard = () => {
   const metrics = useMemo(() => {
     const activeMembers = members.filter((member) => member.memberStatus === "active");
     const inactiveMembers = members.filter((member) => member.memberStatus === "inactive");
-    const currentMonthPayments = payments.filter((payment) => isSameMonth(payment.transaction_date || payment.created_at, 0));
+    const currentMonthPayments = payments.filter((payment) => isSameMonth(payment.payment_for_month || payment.transaction_date || payment.created_at, 0));
     const monthlyRevenue = currentMonthPayments.reduce((total, payment) => total + Number(payment.amount || 0), 0);
     const membershipRevenue = currentMonthPayments
       .filter((payment) => ["Registration Fee", "Monthly Fee"].includes(getPaymentType(payment)))
@@ -158,6 +158,9 @@ const Dashboard = () => {
       .filter((payment) => getPaymentType(payment) === "Locker Fee")
       .reduce((total, payment) => total + Number(payment.amount || 0), 0);
     const securityDeposit = currentMonthPayments
+      .filter((payment) => getPaymentType(payment) === "Locker Security")
+      .reduce((total, payment) => total + Number(payment.amount || 0), 0);
+    const totalSecurityDeposit = payments
       .filter((payment) => getPaymentType(payment) === "Locker Security")
       .reduce((total, payment) => total + Number(payment.amount || 0), 0);
     const currentMonthExpenses = expenses.filter((expense) => isSameMonth(expense.date, 0));
@@ -191,6 +194,7 @@ const Dashboard = () => {
       membershipRevenue,
       lockerFee,
       securityDeposit,
+      totalSecurityDeposit,
       monthlyExpense,
       currentMonthExpenses,
       projectedProfit,
@@ -206,10 +210,10 @@ const Dashboard = () => {
     const grouped = new Map();
 
     payments.forEach((payment) => {
-      const key = monthKey(payment.transaction_date || payment.created_at);
+      const key = monthKey(payment.payment_for_month || payment.transaction_date || payment.created_at);
       const current = grouped.get(key) || {
         month: key,
-        sortDate: payment.transaction_date || payment.created_at,
+        sortDate: payment.payment_for_month || payment.transaction_date || payment.created_at,
         revenue: 0,
         members: 0,
         expense: 0,
@@ -266,7 +270,7 @@ const Dashboard = () => {
     };
 
     payments.forEach((payment) => {
-      const id = monthId(payment.transaction_date || payment.created_at);
+      const id = monthId(payment.payment_for_month || payment.transaction_date || payment.created_at);
       if (!id) return;
 
       const amount = Number(payment.amount || 0);
@@ -458,7 +462,7 @@ const Dashboard = () => {
           /> */}
           <KpiCard
             title="Locker Security Fee"
-            value={currency.format(metrics.lockerFee)}
+            value={currency.format(metrics.securityDeposit)}
             helper="Locker fee payments this month"
             icon={<Lock size={20} />}
             tone="emerald"
@@ -533,7 +537,7 @@ const Dashboard = () => {
         </div>
       </section>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-3">
         <KpiCard
           title="Active Members"
           value={metrics.activeMembers.length}
@@ -547,6 +551,12 @@ const Dashboard = () => {
           helper={`${metrics.overdueMembers.length} overdue, ${metrics.dueMembers.length} due`}
           icon={<AlertTriangle size={20} />}
           tone="rose"
+        />
+        <KpiCard
+          title="Total Locker Security Fee"
+          value={currency.format(metrics.totalSecurityDeposit)}
+          icon={<Lock size={20} />}
+          tone="emerald"
         />
       </div>
 

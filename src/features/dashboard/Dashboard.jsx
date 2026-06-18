@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowUpRight, BarChart3, Brain, IndianRupee, Target, TrendingUp, Users } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, BarChart3, Brain, IndianRupee, Lock, ShieldCheck, Target, TrendingUp, Users } from "lucide-react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import supabase from "../../../helpers/supabase";
 import { loadExpensesFromDb } from "../librarymanagement/libraryStorage";
@@ -14,19 +14,48 @@ const currency = new Intl.NumberFormat("en-IN", {
 const COLORS = ["#2563eb", "#059669", "#f59e0b", "#e11d48", "#7c3aed", "#0f766e"];
 
 const monthKey = (dateValue) => {
-  const date = dateValue ? new Date(`${dateValue}T00:00:00`) : new Date();
+  const date = dateValue ? new Date(dateValue) : new Date();
   return date.toLocaleString("en-IN", { month: "short", year: "2-digit" });
 };
 
 const isSameMonth = (dateValue, offset = 0) => {
   if (!dateValue) return false;
 
-  const date = new Date(`${dateValue}T00:00:00`);
+  const date = new Date(dateValue);
   const target = new Date();
   target.setMonth(target.getMonth() + offset);
 
   return date.getMonth() === target.getMonth() && date.getFullYear() === target.getFullYear();
 };
+
+const currentMonthLabel = new Date().toLocaleString("en-IN", { month: "long", year: "numeric" });
+
+const monthId = (dateValue) => {
+  if (!dateValue) return "";
+
+  const date = new Date(dateValue);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+};
+
+const monthLabelFromId = (id) => {
+  if (!id) return "Unknown month";
+
+  return new Date(`${id}-01T00:00:00`).toLocaleString("en-IN", { month: "long", year: "numeric" });
+};
+
+const addMonthsToId = (id, offset) => {
+  const date = new Date(`${id}-01T00:00:00`);
+  date.setMonth(date.getMonth() + offset);
+
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+};
+
+const getPaymentType = (payment) => payment.payment_type || "Monthly Fee";
 
 const KpiCard = ({ title, value, helper, icon, tone = "blue" }) => {
   const toneClasses = {
@@ -34,6 +63,7 @@ const KpiCard = ({ title, value, helper, icon, tone = "blue" }) => {
     emerald: "bg-emerald-600",
     amber: "bg-amber-500",
     rose: "bg-rose-600",
+    slate: "bg-slate-700",
   };
 
   return (
@@ -71,6 +101,8 @@ const InsightCard = ({ title, description, tone }) => {
 const Dashboard = () => {
   const [members, setMembers] = useState([]);
   const [expenses, setExpenses] = useState([]);
+  const [payments, setPayments] = useState([]);
+  const [selectedFinanceMonth, setSelectedFinanceMonth] = useState("");
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -81,8 +113,9 @@ const Dashboard = () => {
       setLoading(true);
       setErrorMessage("");
 
-      const [{ data, error }, loadedExpenses] = await Promise.all([
+      const [{ data, error }, { data: paymentData, error: paymentError }, loadedExpenses] = await Promise.all([
         supabase.from("library_members").select("*").order("created_at", { ascending: false }),
+        supabase.from("payment_history").select("*").order("transaction_date", { ascending: false }),
         loadExpensesFromDb(),
       ]);
 
@@ -93,6 +126,13 @@ const Dashboard = () => {
         setMembers([]);
       } else {
         setMembers(data.map(mapMemberFromDb));
+      }
+
+      if (paymentError) {
+        setErrorMessage((message) => [message, paymentError.message].filter(Boolean).join(" "));
+        setPayments([]);
+      } else {
+        setPayments(paymentData || []);
       }
 
       setExpenses(loadedExpenses);
@@ -109,7 +149,17 @@ const Dashboard = () => {
   const metrics = useMemo(() => {
     const activeMembers = members.filter((member) => member.memberStatus === "active");
     const inactiveMembers = members.filter((member) => member.memberStatus === "inactive");
-    const monthlyRevenue = activeMembers.reduce((total, member) => total + Number(member.feeAmount || 0), 0);
+    const currentMonthPayments = payments.filter((payment) => isSameMonth(payment.transaction_date || payment.created_at, 0));
+    const monthlyRevenue = currentMonthPayments.reduce((total, payment) => total + Number(payment.amount || 0), 0);
+    const membershipRevenue = currentMonthPayments
+      .filter((payment) => ["Registration Fee", "Monthly Fee"].includes(getPaymentType(payment)))
+      .reduce((total, payment) => total + Number(payment.amount || 0), 0);
+    const lockerFee = currentMonthPayments
+      .filter((payment) => getPaymentType(payment) === "Locker Fee")
+      .reduce((total, payment) => total + Number(payment.amount || 0), 0);
+    const securityDeposit = currentMonthPayments
+      .filter((payment) => getPaymentType(payment) === "Locker Security")
+      .reduce((total, payment) => total + Number(payment.amount || 0), 0);
     const currentMonthExpenses = expenses.filter((expense) => isSameMonth(expense.date, 0));
     const monthlyExpense = currentMonthExpenses.reduce((total, expense) => total + Number(expense.amount || 0), 0);
     const projectedProfit = monthlyRevenue - monthlyExpense;
@@ -136,7 +186,11 @@ const Dashboard = () => {
     return {
       activeMembers,
       inactiveMembers,
+      currentMonthPayments,
       monthlyRevenue,
+      membershipRevenue,
+      lockerFee,
+      securityDeposit,
       monthlyExpense,
       currentMonthExpenses,
       projectedProfit,
@@ -146,32 +200,128 @@ const Dashboard = () => {
       growthRate,
       churnRate,
     };
-  }, [expenses, members]);
+  }, [expenses, members, payments]);
 
   const trendData = useMemo(() => {
     const grouped = new Map();
 
-    members.forEach((member) => {
-      const key = monthKey(member.registrationDate);
-      const current = grouped.get(key) || { month: key, revenue: 0, members: 0, expense: 0 };
+    payments.forEach((payment) => {
+      const key = monthKey(payment.transaction_date || payment.created_at);
+      const current = grouped.get(key) || { month: key, sortDate: payment.transaction_date || payment.created_at, revenue: 0, members: 0, expense: 0 };
       grouped.set(key, {
         ...current,
-        revenue: current.revenue + Number(member.feeAmount || 0),
-        members: current.members + 1,
+        revenue: current.revenue + Number(payment.amount || 0),
       });
+    });
+
+    members.forEach((member) => {
+      const key = monthKey(member.registrationDate);
+      const current = grouped.get(key) || { month: key, sortDate: member.registrationDate, revenue: 0, members: 0, expense: 0 };
+      grouped.set(key, { ...current, sortDate: current.sortDate || member.registrationDate, members: current.members + 1 });
     });
 
     expenses.forEach((expense) => {
       const key = monthKey(expense.date);
-      const current = grouped.get(key) || { month: key, revenue: 0, members: 0, expense: 0 };
+      const current = grouped.get(key) || { month: key, sortDate: expense.date, revenue: 0, members: 0, expense: 0 };
       grouped.set(key, {
         ...current,
         expense: current.expense + Number(expense.amount || 0),
       });
     });
 
-    return Array.from(grouped.values()).slice(-6);
-  }, [expenses, members]);
+    return Array.from(grouped.values())
+      .sort((first, second) => new Date(first.sortDate) - new Date(second.sortDate))
+      .slice(-6);
+  }, [expenses, members, payments]);
+
+  const monthlyFinanceRows = useMemo(() => {
+    const grouped = new Map();
+
+    const getRow = (id) => {
+      const existing = grouped.get(id);
+
+      if (existing) {
+        return existing;
+      }
+
+      const next = {
+        id,
+        month: monthLabelFromId(id),
+        revenue: 0,
+        membershipRevenue: 0,
+        expenditure: 0,
+        securityDeposit: 0,
+        lockerFee: 0,
+        payments: 0,
+        expenses: 0,
+      };
+      grouped.set(id, next);
+      return next;
+    };
+
+    payments.forEach((payment) => {
+      const id = monthId(payment.transaction_date || payment.created_at);
+      if (!id) return;
+
+      const amount = Number(payment.amount || 0);
+      const type = getPaymentType(payment);
+      const row = getRow(id);
+
+      row.payments += 1;
+
+      if (type === "Locker Security") {
+        row.securityDeposit += amount;
+      }
+
+      if (type === "Locker Fee") {
+        row.lockerFee += amount;
+      }
+
+      if (["Registration Fee", "Monthly Fee"].includes(type)) {
+        row.membershipRevenue += amount;
+      }
+
+      row.revenue += amount;
+    });
+
+    expenses.forEach((expense) => {
+      const id = monthId(expense.date);
+      if (!id) return;
+
+      const row = getRow(id);
+      row.expenditure += Number(expense.amount || 0);
+      row.expenses += 1;
+    });
+
+    const currentId = monthId(new Date().toISOString());
+    const monthIds = [...grouped.keys(), currentId].filter(Boolean).sort();
+    const firstMonthId = monthIds[0];
+    const rows = [];
+
+    if (!firstMonthId) {
+      return rows;
+    }
+
+    for (let id = currentId; id >= firstMonthId; id = addMonthsToId(id, -1)) {
+      rows.push(getRow(id));
+
+      if (id === firstMonthId) {
+        break;
+      }
+    }
+
+    return rows
+      .map((row) => ({ ...row, net: row.revenue - row.expenditure }))
+      .sort((first, second) => second.id.localeCompare(first.id));
+  }, [expenses, payments]);
+
+  const visibleFinanceRows = useMemo(() => {
+    if (selectedFinanceMonth) {
+      return monthlyFinanceRows.filter((row) => row.id === selectedFinanceMonth);
+    }
+
+    return monthlyFinanceRows.slice(0, 3);
+  }, [monthlyFinanceRows, selectedFinanceMonth]);
 
   const expenseMix = useMemo(() => {
     const grouped = metrics.currentMonthExpenses.reduce((result, expense) => {
@@ -214,7 +364,7 @@ const Dashboard = () => {
       list.push({
         title: "Expense pressure is rising",
         tone: "risk",
-        description: `Expenses are ${Math.round((metrics.monthlyExpense / metrics.monthlyRevenue) * 100)}% of active monthly revenue. Review recurring categories first.`,
+        description: `Expenses are ${Math.round((metrics.monthlyExpense / metrics.monthlyRevenue) * 100)}% of recorded monthly revenue. Review recurring categories first.`,
       });
     }
 
@@ -263,21 +413,121 @@ const Dashboard = () => {
       {errorMessage && <div className="border border-red-200 bg-red-50 p-3 text-sm text-red-700">{errorMessage}</div>}
       {loading && <div className="border border-blue-100 bg-blue-50 p-3 text-sm text-blue-800">Loading dashboard metrics...</div>}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <KpiCard
-          title="Active Revenue"
-          value={currency.format(metrics.monthlyRevenue)}
-          helper="Projected from active member fees"
-          icon={<IndianRupee size={20} />}
-          tone="blue"
-        />
-        <KpiCard
-          title="Operating Expense"
-          value={currency.format(metrics.monthlyExpense)}
-          helper="This month's Library Management ledger"
-          icon={<BarChart3 size={20} />}
-          tone="amber"
-        />
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">Monthly Finance Snapshot</h3>
+            <p className="text-sm text-slate-500">{currentMonthLabel} cashflow from recorded payments and expenses.</p>
+          </div>
+          <div
+            className={`border px-3 py-2 text-sm font-semibold ${
+              metrics.projectedProfit >= 0
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : "border-rose-200 bg-rose-50 text-rose-700"
+            }`}
+          >
+            Net: {currency.format(metrics.projectedProfit)}
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <KpiCard
+            title="Monthly Revenue"
+            value={currency.format(metrics.monthlyRevenue)}
+            helper={`Membership: ${currency.format(metrics.membershipRevenue)}`}
+            icon={<IndianRupee size={20} />}
+            tone="blue"
+          />
+          <KpiCard
+            title="Monthly Expenditure"
+            value={currency.format(metrics.monthlyExpense)}
+            helper={`${metrics.currentMonthExpenses.length} expense entries`}
+            icon={<BarChart3 size={20} />}
+            tone="amber"
+          />
+          <KpiCard
+            title="Security Deposit"
+            value={currency.format(metrics.securityDeposit)}
+            helper="Locker security collected this month"
+            icon={<ShieldCheck size={20} />}
+            tone="slate"
+          />
+          <KpiCard
+            title="Locker Fee"
+            value={currency.format(metrics.lockerFee)}
+            helper="Locker fee payments this month"
+            icon={<Lock size={20} />}
+            tone="emerald"
+          />
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">Monthly Finance History</h3>
+            <p className="text-sm text-slate-500">
+              {selectedFinanceMonth ? "Selected month totals from recorded payments and expenses." : "Latest 3 months from recorded payments and expenses."}
+            </p>
+          </div>
+          <select
+            value={selectedFinanceMonth}
+            onChange={(event) => setSelectedFinanceMonth(event.target.value)}
+            className="min-w-48 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-blue-500"
+          >
+            <option value="">Latest 3 months</option>
+            {monthlyFinanceRows.map((row) => (
+              <option key={row.id} value={row.id}>
+                {row.month}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="min-w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-3 py-3">Month</th>
+                <th className="px-3 py-3 text-right">Revenue</th>
+                <th className="px-3 py-3 text-right">Expenditure</th>
+                <th className="px-3 py-3 text-right">Security Deposit</th>
+                <th className="px-3 py-3 text-right">Locker Fee</th>
+                <th className="px-3 py-3 text-right">Net</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleFinanceRows.length === 0 && (
+                <tr>
+                  <td className="px-3 py-6 text-center text-slate-500" colSpan={6}>
+                    No monthly finance records available yet.
+                  </td>
+                </tr>
+              )}
+
+              {visibleFinanceRows.map((row) => (
+                <tr key={row.id} className="border-b border-slate-100 last:border-0">
+                  <td className="px-3 py-3">
+                    <div className="font-semibold text-slate-900">{row.month}</div>
+                    <div className="text-xs text-slate-500">
+                      {row.payments} payments, {row.expenses} expenses
+                    </div>
+                  </td>
+                  <td className="px-3 py-3 text-right font-semibold text-slate-900">{currency.format(row.revenue)}</td>
+                  <td className="px-3 py-3 text-right text-slate-700">{currency.format(row.expenditure)}</td>
+                  <td className="px-3 py-3 text-right text-slate-700">{currency.format(row.securityDeposit)}</td>
+                  <td className="px-3 py-3 text-right text-slate-700">{currency.format(row.lockerFee)}</td>
+                  <td className={`px-3 py-3 text-right font-semibold ${row.net >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                    {currency.format(row.net)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <div className="grid gap-4 md:grid-cols-2">
         <KpiCard
           title="Active Members"
           value={metrics.activeMembers.length}

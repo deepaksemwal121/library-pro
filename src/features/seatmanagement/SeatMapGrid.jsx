@@ -25,13 +25,13 @@ export const SeatMapGrid = ({ floor, seats, renderSeat, fallbackClassName }) => 
   const extraSeats = seats.map(String).filter((seat) => !mappedSeatSet.has(seat));
 
   return (
-    <div className="space-y-3">
-      <div className="overflow-x-auto rounded border border-slate-200 bg-white p-2">
+    <div className="space-y-2">
+      <div className="overflow-x-auto rounded border border-slate-200 bg-white p-1">
         <div
-          className="grid min-w-max gap-0.5"
+          className="grid min-w-max gap-2"
           style={{
-            gridTemplateColumns: `repeat(${layout.columns}, minmax(64px, 86px))`,
-            gridTemplateRows: `repeat(${layout.rows}, 52px)`,
+            gridTemplateColumns: `repeat(${layout.columns}, minmax(50px, 66px))`,
+            gridTemplateRows: `repeat(${layout.rows}, 50px)`,
           }}
         >
           {(layout.labels || []).map((item, index) => (

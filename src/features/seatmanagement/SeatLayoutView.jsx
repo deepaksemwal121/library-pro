@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import supabase from "../../../helpers/supabase";
 import { mapMemberFromDb } from "../members/memberUtils";
+import { SeatMapGrid } from "./SeatMapGrid";
 import { loadSeatFloors, normalizeSeatId } from "./seatSettings";
 
 export const SeatLayoutView = ({ currentSeatNumber = null, currentFloor = null, occupiedMembers = null, occupiedSeats = null }) => {
@@ -104,9 +105,11 @@ export const SeatLayoutView = ({ currentSeatNumber = null, currentFloor = null, 
       )}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px] ">
-        {/* Seat Grid */}
-        <div className="grid auto-rows grid-cols-3 items-start gap-2 sm:grid-cols-5 sm:gap-3 md:grid-cols-6 xl:grid-cols-8 ">
-          {activeSeats.map((seat) => {
+        <SeatMapGrid
+          floor={activeFloor}
+          seats={activeSeats}
+          fallbackClassName="grid auto-rows grid-cols-3 items-start gap-2 sm:grid-cols-5 sm:gap-3 md:grid-cols-6 xl:grid-cols-8"
+          renderSeat={(seat) => {
             const occupiedMember = memberBySeat.get(seat);
             const isOccupied = !shouldBlockSeatActions && occupiedSeatSet.has(seat);
             const isCurrent = normalizeSeatId(currentSeatNumber) === seat;
@@ -125,7 +128,7 @@ export const SeatLayoutView = ({ currentSeatNumber = null, currentFloor = null, 
                 onMouseEnter={() => !shouldBlockSeatActions && setHoveredSeat(seat)}
                 onMouseLeave={() => setHoveredSeat(null)}
                 onFocus={() => !shouldBlockSeatActions && setHoveredSeat(seat)}
-                className={` border p-2 text-center text-sm transition-colors flex items-center justify-center flex-col  ${
+                className={`flex h-[52px] items-center justify-center border p-2 text-center text-sm transition-colors flex-col ${
                   shouldBlockSeatActions
                     ? "cursor-wait bg-slate-100 text-slate-300 border-slate-200  animate-pulse"
                     : isOccupied
@@ -139,8 +142,8 @@ export const SeatLayoutView = ({ currentSeatNumber = null, currentFloor = null, 
                 {hasCustomPrice && <span className="text-[10px] leading-none">Rs.{seatPriceValue}</span>}
               </div>
             );
-          })}
-        </div>
+          }}
+        />
 
         {/* Seat Details Sidebar */}
         <aside className="border border-slate-200 bg-white p-4 text-sm rounded lg:sticky lg:top-0 lg:self-start">

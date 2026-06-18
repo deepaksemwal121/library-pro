@@ -1,5 +1,68 @@
 const STORAGE_KEY = "librarypro-seat-settings";
 
+const range = (start, count) => Array.from({ length: count }, (_, index) => String(start + index));
+
+const createSeatPositions = (rows) =>
+  Object.fromEntries(
+    rows.flatMap(({ row, startColumn, seats }) =>
+      seats.map((seat, index) => [String(seat), { row, column: startColumn + index }]),
+    ),
+  );
+
+const defaultSeatLayouts = {
+  second: {
+    columns: 8,
+    rows: 8,
+    labels: [
+      { label: "Door", row: 1, column: 1 },
+      { label: "2nd Floor", row: 1, column: 2, columnSpan: 6, tone: "title" },
+      { label: "Aisle", row: 2, column: 1, rowSpan: 7, tone: "aisle" },
+      { label: "Wall", row: 2, column: 8, rowSpan: 7, tone: "wall" },
+    ],
+    seats: createSeatPositions([
+      { row: 2, startColumn: 2, seats: range(1, 6) },
+      { row: 4, startColumn: 2, seats: range(7, 6) },
+      { row: 5, startColumn: 3, seats: range(13, 5) },
+      { row: 7, startColumn: 2, seats: range(18, 6) },
+      { row: 8, startColumn: 2, seats: range(24, 6) },
+    ]),
+  },
+  first: {
+    columns: 10,
+    rows: 13,
+    labels: [
+      { label: "Door", row: 1, column: 1, columnSpan: 2 },
+      { label: "1st Floor", row: 1, column: 3, columnSpan: 7, tone: "title" },
+      { label: "Aisle", row: 2, column: 1, columnSpan: 2, rowSpan: 10, tone: "aisle" },
+      { label: "Wall", row: 2, column: 10, rowSpan: 12, tone: "wall" },
+    ],
+    seats: createSeatPositions([
+      { row: 2, startColumn: 3, seats: range(30, 7) },
+      { row: 4, startColumn: 3, seats: range(37, 7) },
+      { row: 5, startColumn: 4, seats: range(44, 6) },
+      { row: 7, startColumn: 3, seats: range(50, 7) },
+      { row: 8, startColumn: 3, seats: range(57, 7) },
+      { row: 10, startColumn: 4, seats: range(64, 6) },
+      { row: 11, startColumn: 3, seats: range(70, 7) },
+      { row: 13, startColumn: 1, seats: range(77, 9) },
+    ]),
+  },
+};
+
+const getDefaultSeatLayout = (floor) => {
+  const floorName = floor?.name?.toLowerCase() ?? "";
+
+  if (floor?.id === "second" || floorName.includes("second") || floorName.includes("2nd")) {
+    return defaultSeatLayouts.second;
+  }
+
+  if (floor?.id === "first" || floorName.includes("first") || floorName.includes("1st")) {
+    return defaultSeatLayouts.first;
+  }
+
+  return null;
+};
+
 export const defaultSeatFloors = [
   {
     id: "second",
@@ -7,6 +70,7 @@ export const defaultSeatFloors = [
     price: 1100,
     lockerAvailable: true,
     seatPrices: {},
+    layout: defaultSeatLayouts.second,
     seats: Array.from({ length: 29 }, (_, index) => index + 1),
   },
   {
@@ -15,6 +79,7 @@ export const defaultSeatFloors = [
     price: 900,
     lockerAvailable: true,
     seatPrices: {},
+    layout: defaultSeatLayouts.first,
     seats: Array.from({ length: 56 }, (_, index) => index + 30),
   },
   {
@@ -49,6 +114,7 @@ const normalizeFloor = (floor) => ({
   seatPrices: Object.fromEntries(
     Object.entries(floor.seatPrices || {}).map(([seat, price]) => [normalizeSeatId(seat), Number(price) || 0]),
   ),
+  layout: floor.layout ?? getDefaultSeatLayout(floor),
   seats: [...new Set((floor.seats || []).map(normalizeSeatId).filter(Boolean))].sort(sortSeats),
 });
 

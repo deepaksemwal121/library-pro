@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Plus, Settings } from "lucide-react";
 import supabase from "../../../helpers/supabase";
 import { getPaymentStatus, mapMemberFromDb } from "../members/memberUtils";
+import { SeatMapGrid } from "./SeatMapGrid";
 import { createFloorId, getSeatRange, isFreeFloor, loadSeatFloors, normalizeSeatId, saveSeatFloors } from "./seatSettings";
 
 const statusClasses = {
@@ -375,9 +376,11 @@ export const SeatManagement = ({ onSeatSelect = () => {}, isLockerChecked = fals
       )}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
-        {/* Grid Container */}
-        <div className="grid auto-rows-[52px] grid-cols-3 items-start gap-2 sm:grid-cols-5 sm:gap-3 md:grid-cols-6 xl:grid-cols-8">
-          {activeSeats.map((seat) => {
+        <SeatMapGrid
+          floor={activeFloor}
+          seats={activeSeats}
+          fallbackClassName="grid auto-rows-[52px] grid-cols-3 items-start gap-2 sm:grid-cols-5 sm:gap-3 md:grid-cols-6 xl:grid-cols-8"
+          renderSeat={(seat) => {
             const occupiedMember = memberBySeat.get(seat);
             const isOccupied = !shouldBlockSeatActions && occupiedSeatSet.has(seat);
             const seatPrice = getSeatPrice(seat);
@@ -411,8 +414,8 @@ export const SeatManagement = ({ onSeatSelect = () => {}, isLockerChecked = fals
                 {hasCustomPrice && <span className="mt-1 block text-[10px] leading-none">Rs.{seatPrice}</span>}
               </button>
             );
-          })}
-        </div>
+          }}
+        />
 
         <aside className="border border-slate-200 bg-white p-4 text-sm lg:sticky lg:top-0 lg:self-start">
           <h3 className="font-semibold text-slate-800">Seat Details</h3>

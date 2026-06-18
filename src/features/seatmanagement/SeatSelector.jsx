@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import supabase from "../../../helpers/supabase";
 import { mapMemberFromDb } from "../members/memberUtils";
+import { SeatMapGrid } from "./SeatMapGrid";
 import { loadSeatFloors, normalizeSeatId } from "./seatSettings";
 
 export const SeatSelector = ({
@@ -129,9 +130,11 @@ export const SeatSelector = ({
       )}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
-        {/* Seat Grid */}
-        <div className="grid auto-rows-[52px] grid-cols-3 items-start gap-2 sm:grid-cols-5 sm:gap-3 md:grid-cols-6 xl:grid-cols-8">
-          {activeSeats.map((seat) => {
+        <SeatMapGrid
+          floor={activeFloor}
+          seats={activeSeats}
+          fallbackClassName="grid auto-rows-[52px] grid-cols-3 items-start gap-2 sm:grid-cols-5 sm:gap-3 md:grid-cols-6 xl:grid-cols-8"
+          renderSeat={(seat) => {
             const occupiedMember = memberBySeat.get(seat);
             const isOccupied = !shouldBlockSeatActions && occupiedSeatSet.has(seat);
             const isSelected = selectedSeat === seat;
@@ -167,8 +170,8 @@ export const SeatSelector = ({
                 {hasCustomPrice && <span className="text-[10px] leading-none">Rs.{seatPriceValue}</span>}
               </button>
             );
-          })}
-        </div>
+          }}
+        />
 
         {/* Seat Details Sidebar */}
         <aside className="border border-slate-200 bg-white p-4 text-sm rounded lg:sticky lg:top-0 lg:self-start">
